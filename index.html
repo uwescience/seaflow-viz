@@ -15,23 +15,37 @@ body {
 	line-height: 18px;
 }
 
-#map-div {
+#map-canvas {
 	width: 50%;
 	height: 50%;
-	position: relative;
-	margin: 0
-}
-
-#map-canvas {
-	height: 100%
+	float: left
 }
 
 #stream-div {
-	width: 50%;
+	width: 25%;
 	height: 50%;
+	float: left;
 	position: relative;
 	margin: 0;
-	backgroundColor: 'blue'
+	position: relative;
+}
+
+#evt-opp-div {
+	width: 25%;
+	height: 50%;
+	float: left;
+	position: relative;
+	margin: 0;
+	position: relative;
+}
+
+#d1d2-div {
+	width: 25%;
+	height: 50%;
+	float: left;
+	position: relative;
+	margin: 0;
+	position: relative;
 }
 </style>
 <link href="css/nv.d3.css" rel="stylesheet">
@@ -231,26 +245,6 @@ body {
   
 </script>
 <script type="text/javascript">
-  function getStreamPressure() {
-    var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
-    var query = 'SELECT * ';
-    query += 'FROM [seaflow.viz@gmail.com].[Seaflow: Stream pressure vs Time] ';
-    query += 'ORDER BY [DateTime] ASC';
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        plotSqlData(jsonp, '#stream-svg');
-      }
-    });
-  }
-
   function plotSqlData(data, svgName) {
     // Step 1: convert the data over to nvd3's format
     // .. Ensure that there are exactly 2 columns, X and Y
@@ -291,13 +285,12 @@ body {
 
     nv.addGraph(function() {
       var chart = nv.models.scatterChart();
-
       chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
-
       chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
 
       d3.select(svgName).datum(datum).transition().duration(500).call(chart);
 
+      // So it auto-resizes
       nv.utils.windowResize(function() {
         d3.select(svgName).call(chart)
       });
@@ -306,44 +299,65 @@ body {
     });
   }
 
-  getStreamPressure();
-
-  /**************************************
-   * Simple test data generator
-   */
-
-  function sinAndCos() {
-    var sin = [], cos = [];
-
-    for ( var i = 0; i < 100; i++) {
-      sin.push({
-        x : i,
-        y : Math.sin(i / 10)
-      });
-      cos.push({
-        x : i,
-        y : .5 * Math.cos(i / 10)
-      });
-    }
-
-    return [ {
-      values : sin,
-      key : 'Sine Wave',
-      color : '#ff7f0e'
-    }, {
-      values : cos,
-      key : 'Cosine Wave',
-      color : '#2ca02c'
-    } ];
+  function plotSqlQuery(query, svgId) {
+    console.log('in plotSqlQuery for ' + svgId);
+    var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        plotSqlData(jsonp, svgId);
+      }
+    });
   }
+
+  function getStreamPressure() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[Seaflow: Stream pressure vs Time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#stream-svg');
+  }
+
+  function getEvtOppRatio() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Evt-Opp ratio vs Time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#evt-opp-svg');
+  }
+
+  function getD1D2() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: D1D2 vs Time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#d1d2-svg');
+  }
+
+  function makeDataPlots() {
+    getStreamPressure();
+    getEvtOppRatio();
+    getD1D2();
+  }
+  
+  makeDataPlots();
+  setInterval(makeDataPlots, 30 * 1000);
 </script>
 </head>
 <body>
-	<div id="map-div">
-		<div id="map-canvas"></div>
-	</div>
+	<div id="map-canvas"></div>
 	<div id="stream-div">
 		<svg id="stream-svg" />
+	</div>
+	<div id="evt-opp-div">
+		<svg id="evt-opp-svg" />
+	</div>
+	<div id="d1d2-div">
+		<svg id="d1d2-svg" />
 	</div>
 </body>
 </html>
