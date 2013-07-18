@@ -229,32 +229,49 @@ body {
   function plotSqlData(data, svgName) {
     // Step 1: convert the data over to nvd3's format
     // .. Ensure that there are exactly 2 columns, X and Y
-    if (data.header.length != 2) {
+    if (data.header.length < 2) {
       alert('Query ' + data.sql + ' returned ' + data.header.length
-          + 'columns, not 2');
+          + ' columns, needs at least 2');
       return;
     }
+    // The datum for the scatter plot
+    var datum = new Array(data.header.length - 1);
+    for ( var col = 0; col < data.header.length - 1; ++col) {
+      datum[col] = {
+        values : [],
+        key : data.header[col + 1]
+      };
+    }
     // Construct the (x,y) tuples
-    var dataValues = [];
     for ( var i in data.data) {
       xval = data.data[i][0];
-      yval = data.data[i][1];
       if (data.type[0] == 'datetime') {
         xval = new Date(xval).getTime();
       }
-      dataValues.push({
-        x : xval,
-        y : yval
-      });
+      for ( var col = 0; col < data.header.length - 1; ++col) {
+        yval = data.data[i][col + 1];
+        datum[col].values.push({
+          x : xval,
+          y : yval
+        });
+      }
     }
     // X and Y labels
     var xLabel = data.header[0];
     var yLabel = data.header[1];
-    // The datum for the scatter plot
-    var datum = [ {
-      values : dataValues,
-      key : yLabel
-    } ];
+	// For multiple columns, set the label to the common prefix
+    if (data.header.length > 2) {
+      for ( var col = 2; col < data.header.length; ++col) {
+        var curHeader = data.header[col];
+        for (var i = 0; i < yLabel.length && i < curHeader.length; ++i) {
+          if (yLabel[i] == curHeader[i]) {
+            continue;
+          } else {
+            yLabel = yLabel.substring(0, i);
+          }
+        }
+      }
+    }
     // X tick formatting
     if (data.type[0] == 'datetime') {
       xFormat = function(d) {
@@ -266,6 +283,7 @@ body {
 
     nv.addGraph(function() {
       var chart = nv.models.scatterChart();
+      chart.tooltips(false);
       chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
       chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
 
@@ -319,12 +337,20 @@ body {
     plotSqlQuery(query, '#d1d2-svg');
   }
 
+  function getPopConc() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise concentrations] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#pop-conc-svg');
+  }
+
   function makeDataPlots() {
     getStreamPressure();
     getEvtOppRatio();
     getD1D2();
+    getPopConc();
   }
-  
+
   makeDataPlots();
   setInterval(makeDataPlots, 30 * 1000);
 </script>
@@ -339,6 +365,9 @@ body {
 	</div>
 	<div id="d1d2-div" class='graph'>
 		<svg id="d1d2-svg" />
+	</div>
+	<div id="pop-conc-div" class='graph'>
+		<svg id="pop-conc-svg" />
 	</div>
 </body>
 </html>
