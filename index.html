@@ -13,6 +13,13 @@ body {
 	padding: 0
 }
 
+#map-div {
+	width: 50%;
+	height: 100%;
+	position: relative;
+	margin: 0
+}
+
 #log-div {
 	height: 10%;
 	position: relative;
@@ -133,7 +140,7 @@ body {
   // Get the ship tracks
   function addShipTracks(map) {
     canvasLog('refreshing ship tracks since ' + recentShipTimestamp);
-    var query = 'SELECT TOP 5 Lat, Lon, UnixTimestamp ';
+    var query = 'SELECT Lat, Lon, UnixTimestamp ';
     query += 'FROM [seaflow.viz@gmail.com].[sds_view] ';
     query += 'WHERE UnixTimestamp > ' + recentShipTimestamp + ' ';
     query += 'ORDER BY UnixTimestamp ASC';
@@ -189,6 +196,9 @@ body {
     // Create the map
     var mapOptions = {
       center : armbrustLab,
+      panControl: false,
+      streetViewControl : false,
+      zoomControl : false,
       zoom : 8,
       mapTypeId : google.maps.MapTypeId.SATELLITE
     };
@@ -215,9 +225,11 @@ body {
 </script>
 </head>
 <body>
-	<div id="log-div">
-		<canvas id="log-canvas"></canvas>
+	<div id="map-div">
+		<div id="log-div">
+			<canvas id="log-canvas"></canvas>
+		</div>
+		<div id="map-canvas"></div>
 	</div>
-	<div id="map-canvas"></div>
 </body>
 </html>
