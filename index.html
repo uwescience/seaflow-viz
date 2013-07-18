@@ -10,31 +10,31 @@ html {
 body {
 	height: 100%;
 	margin: 0;
-	padding: 0
+	padding: 0;
+	font-size: 13px;
+	line-height: 18px;
 }
 
 #map-div {
 	width: 50%;
-	height: 100%;
+	height: 50%;
 	position: relative;
 	margin: 0
-}
-
-#log-div {
-	height: 10%;
-	position: relative;
-	margin: 0
-}
-
-#log-canvas {
-	height: 100%;
-	width: 100%;
 }
 
 #map-canvas {
-	height: 90%
+	height: 100%
+}
+
+#stream-div {
+	width: 50%;
+	height: 50%;
+	position: relative;
+	margin: 0;
+	backgroundColor: 'blue'
 }
 </style>
+<link href="css/nv.d3.css" rel="stylesheet">
 <script type="text/javascript"
 	src="https://maps.googleapis.com/maps/api/js?sensor=false">
   
@@ -61,6 +61,8 @@ body {
   var logbuffer = '';
 
   function canvasLog(message) {
+    console.log(message);
+    return;
     logbuffer = logbuffer + ' ** ' + message;
     var LOG_SIZE = 100;
     if (logbuffer.length > LOG_SIZE) {
@@ -132,7 +134,7 @@ body {
     canvasLog("setting ship at recent " + recentShipLocation);
     shipMarker.setMap(map);
     shipMarker.setPosition(recentShipLocation);
-    if (!map.getBounds().contains(recentShipLocation)) {
+    if (!map.getBounds() || !map.getBounds().contains(recentShipLocation)) {
       zoomMapToBounds(map);
     }
   }
@@ -228,13 +230,120 @@ body {
 <script type="text/javascript" src="js/nv.d3.min.js">
   
 </script>
+<script type="text/javascript">
+  function getStreamPressure() {
+    var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[Seaflow: Stream pressure vs Time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        plotSqlData(jsonp, '#stream-svg');
+      }
+    });
+  }
+
+  function plotSqlData(data, svgName) {
+    // Step 1: convert the data over to nvd3's format
+    // .. Ensure that there are exactly 2 columns, X and Y
+    if (data.header.length != 2) {
+      alert('Query ' + data.sql + ' returned ' + data.header.length
+          + 'columns, not 2');
+      return;
+    }
+    // Construct the (x,y) tuples
+    var dataValues = [];
+    for ( var i in data.data) {
+      xval = data.data[i][0];
+      yval = data.data[i][1];
+      if (data.type[0] == 'datetime') {
+        xval = new Date(xval).getTime();
+      }
+      dataValues.push({
+        x : xval,
+        y : yval
+      });
+    }
+    // X and Y labels
+    var xLabel = data.header[0];
+    var yLabel = data.header[1];
+    // The datum for the scatter plot
+    var datum = [ {
+      values : dataValues,
+      key : yLabel
+    } ];
+    // X tick formatting
+    if (data.type[0] == 'datetime') {
+      xFormat = function(d) {
+        return d3.time.format('%m/%d-%H:%M')(new Date(d));
+      }
+    } else {
+      xFormat = d3.format(',r');
+    }
+
+    nv.addGraph(function() {
+      var chart = nv.models.scatterChart();
+
+      chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
+
+      chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
+
+      d3.select(svgName).datum(datum).transition().duration(500).call(chart);
+
+      nv.utils.windowResize(function() {
+        d3.select(svgName).call(chart)
+      });
+
+      return chart;
+    });
+  }
+
+  getStreamPressure();
+
+  /**************************************
+   * Simple test data generator
+   */
+
+  function sinAndCos() {
+    var sin = [], cos = [];
+
+    for ( var i = 0; i < 100; i++) {
+      sin.push({
+        x : i,
+        y : Math.sin(i / 10)
+      });
+      cos.push({
+        x : i,
+        y : .5 * Math.cos(i / 10)
+      });
+    }
+
+    return [ {
+      values : sin,
+      key : 'Sine Wave',
+      color : '#ff7f0e'
+    }, {
+      values : cos,
+      key : 'Cosine Wave',
+      color : '#2ca02c'
+    } ];
+  }
+</script>
 </head>
 <body>
 	<div id="map-div">
-		<div id="log-div">
-			<canvas id="log-canvas"></canvas>
-		</div>
 		<div id="map-canvas"></div>
+	</div>
+	<div id="stream-div">
+		<svg id="stream-svg" />
 	</div>
 </body>
 </html>
