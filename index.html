@@ -196,7 +196,7 @@ body {
     // Create the map
     var mapOptions = {
       center : armbrustLab,
-      panControl: false,
+      panControl : false,
       streetViewControl : false,
       zoomControl : false,
       zoom : 8,
@@ -214,13 +214,18 @@ body {
     // Refresh timer
     setInterval(function() {
       addShipTracks(map);
-    }, 5 * 1000);
+    }, 30 * 1000);
   }
 
   google.maps.event.addDomListener(window, 'load', initialize);
 </script>
-<script type="text/javascript"
-	src="http://code.jquery.com/jquery.min.js">
+<script type="text/javascript" src="js/jquery.min.js">
+  
+</script>
+<script type="text/javascript" src="js/d3.min.js">
+  
+</script>
+<script type="text/javascript" src="js/nv.d3.min.js">
   
 </script>
 </head>
