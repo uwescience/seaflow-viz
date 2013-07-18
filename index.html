@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+<style type="text/css">
+html {
+	height: 100%
+}
+
+body {
+	height: 100%;
+	margin: 0;
+	padding: 0
+}
+
+#log-div {
+	height: 10%;
+	position: relative;
+	margin: 0
+}
+
+#log-canvas {
+	height: 100%;
+	width: 100%;
+}
+
+#map-canvas {
+	height: 90%
+}
+</style>
+<script type="text/javascript"
+	src="https://maps.googleapis.com/maps/api/js?sensor=false">
+  
+</script>
+<script type="text/javascript">
+  // Useful global variables
+  // .. the geo-coordinates of the Armbrust Lab
+  var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
+  // .. the marker for the ship
+  var shipMarker = new google.maps.Marker({
+    position : armbrustLab,
+    icon : {
+      url : 'sailing-ship-icon.png',
+      anchor : new google.maps.Point(16, 16),
+      size : new google.maps.Size(32, 32)
+    }
+  });
+  // SQLShare REST server for queries
+  var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
+  // The log buffer
+  var logbuffer = '';
+
+  function canvasLog(message) {
+    logbuffer = logbuffer + ' ** ' + message;
+    console.log(logbuffer + ' ' + logbuffer.length);
+    var LOG_SIZE = 100;
+    if (logbuffer.length > LOG_SIZE) {
+      console.log(logbuffer.substring(logbuffer.length - LOG_SIZE));
+      logbuffer = logbuffer.substring(logbuffer.length - LOG_SIZE);
+      console.log(logbuffer.length);
+    }
+    // Create the log canvas
+    var div = document.getElementById("log-div");
+    var canvas = document.getElementById("log-canvas");
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    var context = canvas.getContext("2d");
+    console.log('writing text' + logbuffer);
+    console.log('canvas: (' + canvas.width + ',' + canvas.height + ')');
+    context.fillStyle = "blue";
+    context.font = "24px Helvetica";
+    context.fillText(logbuffer, 0, 24);
+  }
+
+  function zoomMapToBounds(map) {
+    // Get the bounds of the map
+    canvasLog("fetching map bounds");
+    $.ajax({
+      url : sqlshare_query_url
+          + 'select min(Lat),max(Lat),min(Lon),max(Lon) from [seaflow.viz@gmail.com].[sds_view]',
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        bounds = jsonp['data'][0];
+        // Order the latitudes such that max-min is at most 90 degrees.
+        if ((bounds[1] - bounds[0]) <= 90) {
+          minLat = bounds[0];
+          maxLat = bounds[1];
+        } else {
+          minLat = bounds[1];
+          maxLat = bounds[0];
+        }
+        // Order the longitudes such that max-min is at most 180 degrees.
+        if ((bounds[3] - bounds[2]) <= 180) {
+          minLon = bounds[2];
+          maxLon = bounds[3];
+        } else {
+          minLon = bounds[3];
+          maxLon = bounds[2];
+        }
+        minBound = new google.maps.LatLng(minLat, minLon);
+        maxBound = new google.maps.LatLng(maxLat, maxLon);
+
+        // Do the zoom
+        canvasLog("zooming to map bounds");
+        map.fitBounds(new google.maps.LatLngBounds(minBound, maxBound));
+      }
+    });
+  }
+
+  // Put the ship icon at the most recent location
+  function setupShipIcon(map) {
+    canvasLog("getting ship location");
+    shipMarker.setMap(map);
+    $.ajax({
+      url : sqlshare_query_url
+          + 'select TOP 1 Lat,Lon from [seaflow.viz@gmail.com].[sds_view] ORDER BY [DateTime] DESC',
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        console.log("error in setupShipIcon errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        point = jsonp['data'][0];
+        canvasLog("setting ship location to " + point);
+        shipMarker.setPosition(new google.maps.LatLng(point[0], point[1]));
+      }
+    });
+  }
+
+  // Get the ship tracks
+  function addShipTracks(map) {
+    $.ajax({
+      url : sqlshare_query_url
+          + 'select DISTINCT Lat, Lon from [seaflow.viz@gmail.com].[sds_view]',
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        points = jsonp['data'];
+        var circleOptions = {
+          fillColor : '#FF0000',
+          fillOpacity : 1,
+          strokeOpacity : 0,
+          clickable : false,
+          map : map,
+          radius : 3000
+        };
+        for ( var index in points) {
+          latLon = points[index];
+          circleOptions['center'] = new google.maps.LatLng(latLon[0], latLon[1]);
+          circle = new google.maps.Circle(circleOptions);
+        }
+      }
+    });
+  }
+
+  function initialize() {
+    // Create the map
+    var mapOptions = {
+      center : armbrustLab,
+      zoom : 5,
+      mapTypeId : google.maps.MapTypeId.SATELLITE
+    };
+    var map = new google.maps.Map(document.getElementById("map-canvas"),
+        mapOptions);
+
+    // Get the bounds of the map
+    zoomMapToBounds(map);
+
+    // Put the ship in the right place
+    setupShipIcon(map);
+
+    // Add ship tracks
+    addShipTracks(map);
+  }
+
+  google.maps.event.addDomListener(window, 'load', initialize);
+</script>
+<script type="text/javascript"
+	src="http://code.jquery.com/jquery.min.js">
+  
+</script>
+</head>
+<body>
+	<div id="log-div"><canvas id="log-canvas"></canvas></div>
+	<div id="map-canvas"></div>
+</body>
+</html>
