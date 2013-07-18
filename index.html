@@ -21,31 +21,12 @@ body {
 	float: left
 }
 
-#stream-div {
+.graph {
 	width: 25%;
 	height: 50%;
 	float: left;
 	position: relative;
 	margin: 0;
-	position: relative;
-}
-
-#evt-opp-div {
-	width: 25%;
-	height: 50%;
-	float: left;
-	position: relative;
-	margin: 0;
-	position: relative;
-}
-
-#d1d2-div {
-	width: 25%;
-	height: 50%;
-	float: left;
-	position: relative;
-	margin: 0;
-	position: relative;
 }
 </style>
 <link href="css/nv.d3.css" rel="stylesheet">
@@ -350,13 +331,13 @@ body {
 </head>
 <body>
 	<div id="map-canvas"></div>
-	<div id="stream-div">
+	<div id="stream-div" class='graph'>
 		<svg id="stream-svg" />
 	</div>
-	<div id="evt-opp-div">
+	<div id="evt-opp-div" class='graph'>
 		<svg id="evt-opp-svg" />
 	</div>
-	<div id="d1d2-div">
+	<div id="d1d2-div" class='graph'>
 		<svg id="d1d2-svg" />
 	</div>
 </body>
