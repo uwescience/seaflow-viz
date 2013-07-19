@@ -259,11 +259,11 @@ body {
     // X and Y labels
     var xLabel = data.header[0];
     var yLabel = data.header[1];
-	// For multiple columns, set the label to the common prefix
+    // For multiple columns, set the label to the common prefix
     if (data.header.length > 2) {
       for ( var col = 2; col < data.header.length; ++col) {
         var curHeader = data.header[col];
-        for (var i = 0; i < yLabel.length && i < curHeader.length; ++i) {
+        for ( var i = 0; i < yLabel.length && i < curHeader.length; ++i) {
           if (yLabel[i] == curHeader[i]) {
             continue;
           } else {
@@ -283,9 +283,13 @@ body {
 
     nv.addGraph(function() {
       var chart = nv.models.scatterChart();
-      chart.tooltips(false);
       chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
       chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
+
+      chart.tooltips(false);
+      if (datum.length == 1) {
+        chart.showLegend(false);
+      }
 
       d3.select(svgName).datum(datum).transition().duration(500).call(chart);
 
@@ -344,11 +348,19 @@ body {
     plotSqlQuery(query, '#pop-conc-svg');
   }
 
+  function getFscSignal() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: beads FSC signal] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#fsc-svg');
+  }
+
   function makeDataPlots() {
     getStreamPressure();
     getEvtOppRatio();
     getD1D2();
     getPopConc();
+    getFscSignal();
   }
 
   makeDataPlots();
@@ -357,16 +369,19 @@ body {
 </head>
 <body>
 	<div id="map-canvas"></div>
-	<div id="stream-div" class='graph'>
+	<div class='graph'>
 		<svg id="stream-svg" />
 	</div>
-	<div id="evt-opp-div" class='graph'>
+	<div class='graph'>
 		<svg id="evt-opp-svg" />
 	</div>
-	<div id="d1d2-div" class='graph'>
+	<div class='graph'>
 		<svg id="d1d2-svg" />
 	</div>
-	<div id="pop-conc-div" class='graph'>
+	<div class='graph'>
+		<svg id="fsc-svg" />
+	</div>
+	<div class='graph'>
 		<svg id="pop-conc-svg" />
 	</div>
 </body>
