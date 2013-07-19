@@ -69,6 +69,8 @@ body {
 <script src="js/infobox_packed.1.1.12.js" type="text/javascript"></script>
 <script type="text/javascript">
   // Useful global variables
+  // .. the refresh time of the page
+  var REFRESH_TIME_MILLIS = 60 * 1000;
   // .. the geo-coordinates of the Armbrust Lab
   var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
   // The ship tracks
@@ -260,7 +262,7 @@ body {
     // Refresh timer
     setInterval(function() {
       addShipTracks(map);
-    }, 30 * 1000);
+    }, REFRESH_TIME_MILLIS);
   }
 
   google.maps.event.addDomListener(window, 'load', initialize);
@@ -430,15 +432,15 @@ body {
   }
 
   makeDataPlots();
-  setInterval(makeDataPlots, 30 * 1000);
+  setInterval(makeDataPlots, REFRESH_TIME_MILLIS);
 </script>
 </head>
 <body>
 	<div id="container">
 		<div class="vert50">
 			<div id="map-canvas" class="horiz50"></div>
-				<div class='horiz25'>
-			<div class="vert50">
+			<div class='horiz25'>
+				<div class="vert50">
 					<svg id="evt-opp-svg" />
 					<svg id="fsc-svg" />
 				</div>
