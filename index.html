@@ -29,6 +29,13 @@ body {
 	margin: 0;
 }
 
+.vert33 {
+	width: 100%;
+	height: 33.33333%;
+	position: relative;
+	margin: 0;
+}
+
 .horiz50 {
 	width: 50%;
 	height: 100%;
@@ -44,7 +51,6 @@ body {
 	float: left;
 	margin: 0;
 }
-
 </style>
 <link href="css/nv.d3.css" rel="stylesheet">
 <script type="text/javascript"
@@ -372,12 +378,30 @@ body {
     plotSqlQuery(query, '#fsc-svg');
   }
 
+  function getTempSalFluo() {
+    var query = 'SELECT DateTime,Temperature ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Temp,Salinity,Fluo vs time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#temp-svg');
+
+    var query = 'SELECT DateTime,Salinity ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Temp,Salinity,Fluo vs time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#sal-svg');
+
+    var query = 'SELECT DateTime,Fluorescence ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Temp,Salinity,Fluo vs time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#fluo-svg');
+  }
+
   function makeDataPlots() {
     getStreamPressure();
     getEvtOppRatio();
     getD1D2();
     getPopConc();
     getFscSignal();
+    getTempSalFluo();
   }
 
   makeDataPlots();
@@ -406,6 +430,17 @@ body {
 			</div>
 			<div class='horiz25'>
 				<svg id="pop-conc-svg" />
+			</div>
+			<div class='horiz25'>
+				<div class='vert33'>
+					<svg id="temp-svg" />
+				</div>
+				<div class='vert33'>
+					<svg id="sal-svg" />
+				</div>
+				<div class='vert33'>
+					<svg id="fluo-svg" />
+				</div>
 			</div>
 		</div>
 	</div>
