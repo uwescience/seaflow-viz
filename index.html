@@ -424,9 +424,9 @@ body {
     getStreamPressure();
     getEvtOppRatio();
     getD1D2();
-    getPopConc();
     getFscSignal();
     getTempSalFluo();
+    getPopConc();
   }
 
   makeDataPlots();
@@ -437,8 +437,11 @@ body {
 	<div id="container">
 		<div class="vert50">
 			<div id="map-canvas" class="horiz50"></div>
-			<div class='horiz25'>
-				<svg id="evt-opp-svg" />
+				<div class='horiz25'>
+			<div class="vert50">
+					<svg id="evt-opp-svg" />
+					<svg id="fsc-svg" />
+				</div>
 			</div>
 			<div class='horiz25'>
 				<div class='vert50'>
@@ -451,12 +454,6 @@ body {
 		</div>
 		<div class="vert50">
 			<div class='horiz25'>
-				<svg id="fsc-svg" />
-			</div>
-			<div class='horiz25'>
-				<svg id="pop-conc-svg" />
-			</div>
-			<div class='horiz25'>
 				<div class='vert33'>
 					<svg id="temp-svg" />
 				</div>
@@ -466,6 +463,9 @@ body {
 				<div class='vert33'>
 					<svg id="fluo-svg" />
 				</div>
+			</div>
+			<div class='horiz50'>
+				<svg id="pop-conc-svg" />
 			</div>
 		</div>
 	</div>
