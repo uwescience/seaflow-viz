@@ -403,6 +403,14 @@ body {
     plotSqlQuery(query, '#fluo-svg');
   }
 
+  function getVelocity() {
+    var query = 'SELECT [DateTime],[Velocity (m/s)] ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: velocity] ';
+    query += 'WHERE [Velocity (m/s)] IS NOT NULL ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#velo-svg');
+  }
+
   function makeDataPlots() {
     getStreamPressure();
     getEvtOppRatio();
@@ -410,6 +418,7 @@ body {
     getFscSignal();
     // getTempSalFluo();
     getPopConc();
+    getVelocity();
   }
 
   makeDataPlots();
@@ -452,6 +461,9 @@ body {
  -->
 			<div class='horiz50'>
 				<svg id="pop-conc-svg" />
+			</div>
+			<div class='horiz50'>
+				<svg id="velo-svg" />
 			</div>
 		</div>
 	</div>
