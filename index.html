@@ -419,10 +419,34 @@ body {
     // getTempSalFluo();
     getPopConc();
     getVelocity();
+    updateLastTimes();
   }
 
   makeDataPlots();
   setInterval(makeDataPlots, REFRESH_TIME_MILLIS);
+
+  function updateLastTimes() {
+    var query = 'SELECT [SDS Lag], [STATS Lag] FROM ';
+    query += '(SELECT DATEDIFF(minute, MAX([DateTime]), GETDATE()) AS [SDS Lag] FROM [seaflow.viz@gmail.com].[sds_view]) sds, ';
+    query += '(SELECT DATEDIFF(minute, MAX([DateTime]), GETDATE()) AS [STATS Lag] FROM [seaflow.viz@gmail.com].[stats_view]) stats';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        elapsed = jsonp['data'];
+        console.log(elapsed[0][0] + " minutes since last SDS entry.");
+        console.log(elapsed[0][1] + " minutes since last STATS entry.");
+        $("#sds_time").text(elapsed[0][0] + " minutes since last SDS entry.");
+        $("#stats_time").text(elapsed[0][1] + " minutes since last STATS entry.");
+      }
+    });
+  }
 </script>
 </head>
 <body>
@@ -462,8 +486,14 @@ body {
 			<div class='horiz50'>
 				<svg id="pop-conc-svg" />
 			</div>
-			<div class='horiz50'>
+			<div class='horiz25'>
 				<svg id="velo-svg" />
+			</div>
+			<div class='horiz25'>
+				<center>
+					<br><br>
+					<label id='sds_time'></label><br> <label id='stats_time'></label>
+				</center>
 			</div>
 		</div>
 	</div>
