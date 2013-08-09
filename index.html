@@ -12,8 +12,8 @@ body {
 	height: 100%;
 	margin: 0;
 	padding: 0;
-	font-size: 13px;
 	line-height: 18px;
+	font: 13px helvetica,sans-serif;
 }
 
 #container {
@@ -452,15 +452,27 @@ body {
 <body>
 	<div id="container">
 		<div class="vert50">
+			<div class='horiz25'>
+				<center>
+					<p>At right, you can see the cruise track and position of the
+						Kilo Moana, extracted from GPS coordinates in the ship's data
+						systems (SDS). From the GPS tracks, we extract velocity over time.</p>
+					<p>The below panels monitor the performance of the SeaFlow
+						instrument, e.g., the water pressure of seawater through the pump
+						system. At the bottom right, you can see a live preview of the
+						phytoplankton population statistics (STATS).</p>
+						
+					<p id='sds_time'></p>
+					<p
+						id='stats_time'></>
+				</center>
+			</div>
 			<div id="map-canvas" class="horiz50"></div>
 			<div class='horiz25'>
-				<div class="vert50">
-					<svg id="fsc-svg" />
-				</div>
-				<div class="vert50">
-					<svg id="evt-opp-svg" />
-				</div>
+				<svg id="velo-svg" />
 			</div>
+		</div>
+		<div class="vert50">
 			<div class='horiz25'>
 				<div class='vert50'>
 					<svg id="stream-svg" />
@@ -469,8 +481,14 @@ body {
 					<svg id="d1d2-svg" />
 				</div>
 			</div>
-		</div>
-		<div class="vert50">
+			<div class='horiz25'>
+				<div class="vert50">
+					<svg id="fsc-svg" />
+				</div>
+				<div class="vert50">
+					<svg id="evt-opp-svg" />
+				</div>
+			</div>
 			<!-- 			<div class='horiz25'>
 				<div class='vert33'>
 					<svg id="temp-svg" />
@@ -485,15 +503,6 @@ body {
  -->
 			<div class='horiz50'>
 				<svg id="pop-conc-svg" />
-			</div>
-			<div class='horiz25'>
-				<svg id="velo-svg" />
-			</div>
-			<div class='horiz25'>
-				<center>
-					<br><br>
-					<label id='sds_time'></label><br> <label id='stats_time'></label>
-				</center>
 			</div>
 		</div>
 	</div>
