@@ -1,0 +1,52 @@
+===========================================================================
+List of ideas we had, eventually. Short term, we can really only use the current cruise for Monitoring and Quality control, but the remaining goals are interesting. And we have some action items (mainly for Francois?) in the list at the end.
+
+Monitoring and quality control
+- why?
+  - scale out w/# of seaflows
+  - scale down expertise (ease of use)
+  - save/don't waste $$
+- add classifier, so we can see big red light?
+- add alarms when things break?
+
+Student learning and engagement activity
+- classroom
+- undergrad researchers
+- grad students & labs
+
+Adaptive sampling with shore-side guidance
+- why?
+  - logistics (expert can't be on boat)
+  - parallelism (more heads)
+  - training (only way to put all your students on cruise)
+
+Public outreach
+
+"Polymath" cruise. Crowdsourced cruise plan / science
+
+===========================================================================
+
+J&F wish list:
+
+- fix the ship picture
+- design the web page
+- resize the dots with scale
+- annotate when on station [or when alarm]
+- triggered alarms (if STREAM.PRESSURE < 11.5(?) throw an email)
+
+===========================================================================
+
+Action items:
+
+[Q: Can we quantify the opportunities of underway data (incl SeaFlow) from adaptive sampling?]
+- (F) can we look at old cruises and assess opportunities for adaptive sampling?
+
+[Q: Can RT monitoring increase data quality]
+  - (F) can we look at old cruises and assess impact/extent of downtime? (MTBF? MTTR?)
+
+- (D) wish list except design
+- (someone, D does not have time) website design
+
+- (J) get feeds up, assuming it's possible?
+
+- (J&F) 5 or so alarms and the conditions that would trigger them?
