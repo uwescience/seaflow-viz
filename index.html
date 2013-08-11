@@ -51,7 +51,7 @@ body {
 	bottom: 0px;
 	margin: 5;
 	text-align: center;
-	margin-bottom:-5px;
+	margin-bottom: -5px;
 	position: absolute;
 }
 
@@ -69,6 +69,15 @@ body {
 	right: 0px;
 	margin-right: 5px;
 	position: absolute;
+}
+
+.infoBox {
+	font-size: 13px;
+	font-family: helvetica, bold;
+	margin: 5px;
+	padding: 5px;
+	background: white;
+	border-radius: 5px;
 }
 
 #container {
@@ -112,6 +121,7 @@ body {
 	src="https://maps.googleapis.com/maps/api/js?sensor=false">
   
 </script>
+<script src="js/infobox_packed.1.1.12.js" type="text/javascript"></script>
 <script type="text/javascript">
   // Useful global variables
   // .. the refresh time of the page
@@ -129,9 +139,7 @@ body {
       url : 'ships/kilo_moana_logo_56.png',
       anchor : new google.maps.Point(28, 28),
       size : new google.maps.Size(56, 56)
-    },
-    optimized : false,
-    zIndex : 10
+    }
   });
   // SQLShare REST server for queries
   var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
@@ -204,6 +212,7 @@ body {
         canvasLog("zooming to map bounds");
         map.fitBounds(new google.maps.LatLngBounds(minBound, maxBound));
       }
+    // Todo: fix this bounds crap.
     });
   }
 
@@ -214,6 +223,18 @@ body {
     shipMarker.setPosition(recentShipLocation);
     if (!map.getBounds() || !map.getBounds().contains(recentShipLocation)) {
       zoomMapToBounds(map);
+    }
+  }
+
+  var infoBox = new InfoBox({
+    alignBottom : true,
+  });
+  // (ugly?) Workarounds for Javascript scoping. Otherwise it always uses the last-created `circle` object.
+  function _makeMouseover(c) {
+    return function() {
+      infoBox.setContent('<div class="mapInfoWindow">' + c.getCenter().toUrlValue() + '</div>');
+      infoBox.setPosition(c.getCenter());
+      infoBox.open(c.getMap());
     }
   }
 
@@ -247,19 +268,13 @@ body {
         var curPoint;
         var curTimestamp;
         // .. common options for every circle
-        var markerSymbol = {
-          path : google.maps.SymbolPath.CIRCLE,
-          fillColor : "red",
+        var circleOptions = {
+          fillColor : '#FF0000',
           fillOpacity : 1,
-          scale : 2,
-          strokeOpacity : 0
-        };
-        var markerOptions = {
-          icon : markerSymbol,
-          flat : true,
-          optimized : false,
+          strokeOpacity : 0,
+          clickable : true,
           map : map,
-          zIndex : 0
+          radius : 3000
         };
         // .. do the actual work
         for ( var index in tracks) {
@@ -267,9 +282,9 @@ body {
           curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
           curTimestamp = curTrack[2];
 
-          markerOptions.position = curPoint;
-          markerOptions.title = curPoint.toString();
-          var circle = new google.maps.Marker(markerOptions);
+          circleOptions.center = curPoint;
+          var circle = new google.maps.Circle(circleOptions);
+          google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
         }
 
         // Save the most recent point
@@ -510,7 +525,8 @@ body {
 <body>
 	<div id="topleft">
 		<img src="logos/eScience.png" height="50"><img
-			src="logos/nsf.png" height="50">
+			src="logos/nsf.png" height="50"> <img src="logos/moore.png"
+			height="50">
 	</div>
 	<div id="topright">
 		<img src="logos/sqlshare.png" height="50">
@@ -580,7 +596,5 @@ body {
 	<div id="bottombar">This research was sponsored by US National
 		Science Foundation award 1064505, the Gordon and Betty Moore
 		Foundation, and Microsoft Research.</div>
-	<img id="bottomleft" src="logos/msr.png" height="25">
-	<img id="bottomright" src="logos/moore.png" height="25">
 </body>
 </html>
