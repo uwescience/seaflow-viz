@@ -136,11 +136,15 @@ body {
     clickable : false,
     position : recentShipLocation,
     icon : {
-      url : 'ships/kilo_moana_logo_56.png',
-      anchor : new google.maps.Point(28, 28),
-      size : new google.maps.Size(56, 56)
+      url : 'ships/kilo_moana_logo.png',
+      anchor : new google.maps.Point(20, 20),
+      scaledSize : new google.maps.Size(40, 40)
     }
   });
+  // The bounds of the known points in the map
+  var mapBounds = new google.maps.LatLngBounds();
+  // Whether the map has been zoomed yet
+  var hasZoomed = false;
   // SQLShare REST server for queries
   var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
   // The log buffer
@@ -165,65 +169,23 @@ body {
     context.fillText(logbuffer, 0, 24);
   }
 
-  function zoomMapToBounds(map) {
-
-    // invalid timestamp
-    if (recentShipTimestamp <= 0) {
-      return;
-    }
-
-    // Get the bounds of the visible map
-    canvasLog("fetching map bounds");
-    var query = 'SELECT min(Lat), max(Lat), min(Lon), max(Lon) ';
-    query += 'FROM [seaflow.viz@gmail.com].[sds_view] ';
-    query += 'WHERE UnixTimestamp < ' + recentShipTimestamp;
-    // The asynchronous call to actually get the bounds
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        bounds = jsonp['data'][0];
-        // Order the latitudes such that max-min is at most 90 degrees.
-        if ((bounds[1] - bounds[0]) <= 90) {
-          minLat = bounds[0];
-          maxLat = bounds[1];
-        } else {
-          minLat = bounds[1];
-          maxLat = bounds[0];
-        }
-        // Order the longitudes such that max-min is at most 180 degrees.
-        if ((bounds[3] - bounds[2]) <= 180) {
-          minLon = bounds[2];
-          maxLon = bounds[3];
-        } else {
-          minLon = bounds[3];
-          maxLon = bounds[2];
-        }
-        minBound = new google.maps.LatLng(minLat, minLon);
-        maxBound = new google.maps.LatLng(maxLat, maxLon);
-
-        // Do the zoom
-        canvasLog("zooming to map bounds");
-        map.fitBounds(new google.maps.LatLngBounds(minBound, maxBound));
-      }
-    // Todo: fix this bounds crap.
-    });
-  }
-
   // Put the ship icon at the most recent location
   function setupShipIcon(map) {
     canvasLog("setting ship at recent " + recentShipLocation);
     shipMarker.setMap(map);
     shipMarker.setPosition(recentShipLocation);
-    if (!map.getBounds() || !map.getBounds().contains(recentShipLocation)) {
-      zoomMapToBounds(map);
+  }
+
+  function zoomMapToBounds(map) {
+    if (hasZoomed) {
+      var curBounds = map.getBounds();
+      console.log("in zoomMapToBounds: cur=" + curBounds + " map=" + mapBounds);
+      map.fitBounds(curBounds.union(mapBounds));
+    } else {
+      map.fitBounds(mapBounds);
+      hasZoomed = true;
     }
+    console.log("out zoomMapToBounds: map=" + mapBounds);
   }
 
   var infoBox = new InfoBox({
@@ -236,6 +198,45 @@ body {
       infoBox.setPosition(c.getCenter());
       infoBox.open(c.getMap());
     }
+  }
+
+  // Add the waypoints
+  function setupWaypoints(map) {
+    canvasLog("setting waypoints for the cruise");
+    var query = 'SELECT Name, Latitude, Longitude ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Waypoints] ';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        var waypoints = jsonp['data'];
+        var waypointOptions = {
+          map : map,
+          icon : {
+            url : 'https://maps.gstatic.com/mapfiles/ms2/micons/marina.png',
+            anchor : new google.maps.Point(12, 12),
+            scaledSize : new google.maps.Size(24, 24)
+          }
+        };
+
+        /*** Create a marker for every waypoint ***/
+        // .. do the actual work
+        for ( var index in waypoints) {
+          var curPoint = waypoints[index];
+          curWaypoint = new google.maps.LatLng(curPoint[1], curPoint[2]);
+          waypointOptions.position = curWaypoint;
+          waypointOptions.title = curPoint[0];
+
+          var marker = new google.maps.Marker(waypointOptions);
+        }
+      }
+    });
   }
 
   // Get the ship tracks
@@ -281,10 +282,12 @@ body {
           var curTrack = tracks[index];
           curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
           curTimestamp = curTrack[2];
-
           circleOptions.center = curPoint;
           var circle = new google.maps.Circle(circleOptions);
           google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+
+          /* Update map bounds */
+          mapBounds.extend(curPoint);
         }
 
         // Save the most recent point
@@ -293,6 +296,9 @@ body {
         recentShipTimestamp = curTimestamp;
 
         setupShipIcon(map);
+
+        /* Re-zoom the map */
+        zoomMapToBounds(map);
       }
     });
   }
@@ -309,8 +315,8 @@ body {
     };
     var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 
-    // Fit the map to the tracks
-    zoomMapToBounds(map);
+    // Label the cruise waypoints
+    setupWaypoints(map);
 
     // Add ship tracks
     addShipTracks(map);
