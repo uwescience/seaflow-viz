@@ -139,11 +139,12 @@ body {
   var shipMarker = new google.maps.Marker({
     clickable : false,
     position : recentShipLocation,
+    zIndex : 1,
     icon : {
       url : 'ships/kilo_moana_logo.png',
       anchor : new google.maps.Point(20, 20),
       scaledSize : new google.maps.Size(40, 40)
-    }
+    }  
   });
   // The bounds of the known points in the map
   var mapBounds = new google.maps.LatLngBounds();
@@ -222,6 +223,7 @@ body {
         var waypoints = jsonp['data'];
         var waypointOptions = {
           map : map,
+          zIndex : 2,
           icon : {
             url : 'https://maps.gstatic.com/mapfiles/ms2/micons/marina.png',
             anchor : new google.maps.Point(12, 12),
