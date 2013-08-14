@@ -25,6 +25,7 @@ body {
 	text-align: center;
 	margin-top: 13px;
 	font: 24px helvetica, sans-serif, bold;
+	z-index: 1;
 }
 
 #topleft {
@@ -34,6 +35,7 @@ body {
 	margin-left: 5px;
 	margin-top: 5px;
 	position: absolute;
+	z-index: 2;
 }
 
 #topright {
@@ -43,6 +45,7 @@ body {
 	margin-right: 5px;
 	margin-top: 5px;
 	position: absolute;
+	z-index: 2;
 }
 
 #bottombar {
@@ -53,6 +56,7 @@ body {
 	text-align: center;
 	margin-bottom: -5px;
 	position: absolute;
+	z-index: 1;
 }
 
 #bottomleft {
@@ -530,12 +534,15 @@ body {
 </head>
 <body>
 	<div id="topleft">
-		<img src="logos/eScience.png" height="50"><img
-			src="logos/nsf.png" height="50"> <img src="logos/moore.png"
-			height="50">
+		<a href="http://escience.washington.edu/" target="_blank"><img
+			src="logos/eScience.png" height="50"></a><a href="http://nsf.gov/"
+			target="_blank"><img src="logos/nsf.png" height="50"></a><a
+			href="http://www.moore.org/" target="_blank"><img
+			src="logos/moore.png" height="50"></a>
 	</div>
 	<div id="topright">
-		<img src="logos/sqlshare.png" height="50">
+		<a href="https://sqlshare.escience.washington.edu/" target="_blank"><img
+			src="logos/sqlshare.png" height="50"></a>
 	</div>
 	<div id="topbar">R/V Kilo Moana cruise and SeaFlow dashboard</div>
 	<div id="container">
