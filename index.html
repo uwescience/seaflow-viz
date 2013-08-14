@@ -13,7 +13,7 @@ body {
 	margin: 0;
 	padding: 0;
 	line-height: 18px;
-	font: 13px helvetica, sans-serif;
+	font: 12px helvetica, sans-serif;
 }
 
 #topbar {
@@ -85,7 +85,7 @@ body {
 }
 
 #container {
-	width: 100%;
+	width: 1240px;
 	height: 600px;
 	top: 50px;
 	margin: 10px;
@@ -409,11 +409,12 @@ body {
 
       d3.select(svgName).datum(datum).call(chart);
 
+      /*
       // So it auto-resizes
-      nv.utils.windowResize(function() {
-        d3.select(svgName).call(chart)
-      });
-
+          nv.utils.windowResize(function() {
+            d3.select(svgName).call(chart)
+          });
+       */
       return chart;
     });
   }
@@ -454,7 +455,7 @@ body {
     query += 'ORDER BY [DateTime] ASC';
     plotSqlQuery(query, '#event-rate-svg');
   }
-  
+
   function getD1D2() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: D1D2 vs Time] ';
