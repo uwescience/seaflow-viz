@@ -238,6 +238,47 @@ body {
     }
   }
 
+  // Add the waypoints
+  function setupWaypoints(map) {
+    canvasLog("setting waypoints for the cruise");
+    var query = 'SELECT Name, Latitude, Longitude ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Waypoints] ';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        var waypoints = jsonp['data'];
+        var waypointOptions = {
+          map : map,
+          icon : {
+            url : 'https://maps.gstatic.com/mapfiles/ms2/micons/marina.png',
+            anchor : new google.maps.Point(12, 12),
+            scaledsize : new google.maps.Size(24, 24)
+          }
+        };
+
+        /*** Create a marker for every waypoint ***/
+        // .. do the actual work
+        for ( var index in waypoints) {
+          var curPoint = waypoints[index];
+          curWaypoint = new google.maps.LatLng(curPoint[1], curPoint[2]);
+          console.log('adding marker at ');
+          console.log(curWaypoint);
+          waypointOptions.position = curWaypoint;
+          waypointOptions.title = curPoint[0];
+          
+          var marker = new google.maps.Marker(waypointOptions);
+        }
+      }
+    });
+  }
+
   // Get the ship tracks
   function addShipTracks(map) {
     canvasLog('refreshing ship tracks since ' + recentShipTimestamp);
@@ -309,8 +350,7 @@ body {
     };
     var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 
-    // Fit the map to the tracks
-    zoomMapToBounds(map);
+    setupWaypoints(map);
 
     // Add ship tracks
     addShipTracks(map);
