@@ -144,7 +144,7 @@ body {
       url : 'ships/kilo_moana_logo.png',
       anchor : new google.maps.Point(20, 20),
       scaledSize : new google.maps.Size(40, 40)
-    }  
+    }
   });
   // The bounds of the known points in the map
   var mapBounds = new google.maps.LatLngBounds();
@@ -182,15 +182,7 @@ body {
   }
 
   function zoomMapToBounds(map) {
-    if (hasZoomed) {
-      var curBounds = map.getBounds();
-      console.log("in zoomMapToBounds: cur=" + curBounds + " map=" + mapBounds);
-      map.fitBounds(curBounds.union(mapBounds));
-    } else {
-      map.fitBounds(mapBounds);
-      hasZoomed = true;
-    }
-    console.log("out zoomMapToBounds: map=" + mapBounds);
+    map.fitBounds(mapBounds);
   }
 
   var infoBox = new InfoBox({
@@ -404,7 +396,6 @@ body {
       chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
       chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
 
-      //chart.tooltips(false);
       if (datum.length == 1) {
         chart.showLegend(false);
       }
