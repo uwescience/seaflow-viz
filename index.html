@@ -448,6 +448,13 @@ body {
     plotSqlQuery(query, '#evt-opp-svg');
   }
 
+  function getEventRate() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Event Rate] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#event-rate-svg');
+  }
+  
   function getD1D2() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: D1D2 vs Time] ';
@@ -497,6 +504,7 @@ body {
   function makeDataPlots() {
     getStreamPressure();
     getEvtOppRatio();
+    getEventRate();
     getD1D2();
     getFscSignal();
     // getTempSalFluo();
@@ -582,11 +590,14 @@ body {
 				</div>
 			</div>
 			<div class='horiz25'>
-				<div class="vert50">
+				<div class="vert33">
 					<svg id="fsc-svg" />
 				</div>
-				<div class="vert50">
+				<div class="vert33">
 					<svg id="evt-opp-svg" />
+				</div>
+				<div class="vert33">
+					<svg id="event-rate-svg" />
 				</div>
 			</div>
 			<!-- 			<div class='horiz25'>
