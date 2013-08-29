@@ -240,7 +240,7 @@ body {
   // Get the ship tracks
   function addShipTracks(map) {
     canvasLog('refreshing ship tracks since ' + recentShipTimestamp);
-    var query = 'SELECT Lat, Lon, UnixTimestamp ';
+    var query = 'SELECT Top 1000 Lat, Lon, UnixTimestamp ';
     query += 'FROM [seaflow.viz@gmail.com].[sds_view] ';
     query += 'WHERE UnixTimestamp > ' + recentShipTimestamp + ' ';
     query += 'ORDER BY UnixTimestamp ASC';
