@@ -240,9 +240,12 @@ body {
   // Get the ship tracks
   function addShipTracks(map) {
     canvasLog('refreshing ship tracks since ' + recentShipTimestamp);
-    var query = 'SELECT Top 1000 Lat, Lon, UnixTimestamp ';
-    query += 'FROM [seaflow.viz@gmail.com].[sds_view] ';
-    query += 'WHERE UnixTimestamp > ' + recentShipTimestamp + ' ';
+    var query = 'WITH new_sds AS (SELECT *, ROW_NUMBER() OVER (ORDER BY UnixTimestamp ASC) AS row FROM [seaflow.viz@gmail.com].[SDS_VIEW] WHERE UnixTimestamp >' + recentShipTimestamp + ')';
+    query += ', num_tracks AS (SELECT COUNT(*) as num_tracks FROM new_sds)';
+    query += ', granularity AS (SELECT CASE WHEN num_tracks < 1000 THEN 1 ELSE CONVERT(INT, (num_tracks+999)/1000) END AS granularity FROM num_tracks) ';
+    query += 'SELECT Lat, Lon, UnixTimestamp ';
+    query += 'FROM new_sds, num_tracks, granularity ';
+    query += 'WHERE (row-num_tracks) % granularity = 0 ';
     query += 'ORDER BY UnixTimestamp ASC';
     $.ajax({
       url : sqlshare_query_url + encodeURIComponent(query),
@@ -273,7 +276,7 @@ body {
           strokeOpacity : 0,
           clickable : true,
           map : map,
-          radius : 3000
+          radius : 4000
         };
         // .. do the actual work
         for ( var index in tracks) {
