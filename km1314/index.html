@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+<meta name="google" content="notranslate" />
+<style type="text/css">
+html {
+	height: 100%
+}
+
+body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	line-height: 18px;
+	font: 12px helvetica, sans-serif;
+}
+
+#topbar {
+	width: 100%;
+	height: 50px;
+	top: 0px;
+	margin: 0;
+	position: absolute;
+	text-align: center;
+	margin-top: 13px;
+	font: 24px helvetica, sans-serif, bold;
+	z-index: 1;
+}
+
+#topleft {
+	height: 50px;
+	top: 0px;
+	left: 0px;
+	margin-left: 5px;
+	margin-top: 5px;
+	position: absolute;
+	z-index: 2;
+}
+
+#topright {
+	height: 50px;
+	top: 0px;
+	right: 0px;
+	margin-right: 5px;
+	margin-top: 5px;
+	position: absolute;
+	z-index: 2;
+}
+
+#bottombar {
+	width: 100%;
+	height: 25px;
+	bottom: 0px;
+	margin: 5;
+	text-align: center;
+	margin-bottom: -5px;
+	position: absolute;
+	z-index: 1;
+}
+
+#bottomleft {
+	height: 25px;
+	bottom: 0px;
+	left: 0px;
+	margin-left: 5px;
+	position: absolute;
+}
+
+#bottomright {
+	height: 25px;
+	bottom: 0px;
+	right: 0px;
+	margin-right: 5px;
+	position: absolute;
+}
+
+.infoBox {
+	font-size: 13px;
+	font-family: helvetica, bold;
+	margin: 5px;
+	padding: 5px;
+	background: white;
+	border-radius: 5px;
+}
+
+#container {
+	width: 1240px;
+	height: 600px;
+	top: 50px;
+	margin: 10px;
+	position: absolute;
+	margin: 10px;
+	bottom: 0px;
+}
+
+.vert50 {
+	width: 100%;
+	height: 50%;
+	margin: 0;
+}
+
+.vert33 {
+	width: 100%;
+	height: 33.33333%;
+	margin: 0;
+}
+
+.horiz50 {
+	width: 50%;
+	height: 100%;
+	float: left;
+	margin: 0;
+}
+
+.horiz25 {
+	width: 25%;
+	height: 100%;
+	float: left;
+	margin: 0;
+}
+</style>
+<link href="css/nv.d3.css" rel="stylesheet">
+<script type="text/javascript"
+	src="https://maps.googleapis.com/maps/api/js?sensor=false">
+  
+</script>
+<script src="js/infobox_packed.1.1.12.js" type="text/javascript"></script>
+<script type="text/javascript">
+  // Useful global variables
+  // .. the refresh time of the page
+  var REFRESH_TIME_MILLIS = 60 * 1000;
+  // .. the geo-coordinates of the Armbrust Lab
+  var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
+  // The ship tracks
+  var recentShipTimestamp = 0;
+  var recentShipLocation = armbrustLab;
+  // .. the marker for the ship
+  var shipMarker = new google.maps.Marker({
+    clickable : false,
+    position : recentShipLocation,
+    zIndex : 1,
+    icon : {
+      url : 'ships/kilo_moana_logo.png',
+      anchor : new google.maps.Point(20, 20),
+      scaledSize : new google.maps.Size(40, 40)
+    }
+  });
+  // The bounds of the known points in the map
+  var mapBounds = new google.maps.LatLngBounds();
+  // Whether the map has been zoomed yet
+  var hasZoomed = false;
+  // SQLShare REST server for queries
+  var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
+  // The log buffer
+  var logbuffer = '';
+
+  function canvasLog(message) {
+    console.log(message);
+    return;
+    logbuffer = logbuffer + ' ** ' + message;
+    var LOG_SIZE = 100;
+    if (logbuffer.length > LOG_SIZE) {
+      logbuffer = logbuffer.substring(logbuffer.length - LOG_SIZE);
+    }
+    // Create the log canvas
+    var div = document.getElementById("log-div");
+    var canvas = document.getElementById("log-canvas");
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    var context = canvas.getContext("2d");
+    context.fillStyle = "blue";
+    context.font = "24px Helvetica";
+    context.fillText(logbuffer, 0, 24);
+  }
+
+  // Put the ship icon at the most recent location
+  function setupShipIcon(map) {
+    canvasLog("setting ship at recent " + recentShipLocation);
+    shipMarker.setMap(map);
+    shipMarker.setPosition(recentShipLocation);
+  }
+
+  function zoomMapToBounds(map) {
+    map.fitBounds(mapBounds);
+  }
+
+  var infoBox = new InfoBox({
+    alignBottom : true,
+  });
+  // (ugly?) Workarounds for Javascript scoping. Otherwise it always uses the last-created `circle` object.
+  function _makeMouseover(c) {
+    return function() {
+      infoBox.setContent('<div class="mapInfoWindow">' + c.getCenter().toUrlValue() + '</div>');
+      infoBox.setPosition(c.getCenter());
+      infoBox.open(c.getMap());
+    }
+  }
+
+  // Add the waypoints
+  function setupWaypoints(map) {
+    canvasLog("setting waypoints for the cruise");
+    var query = 'SELECT Name, Latitude, Longitude ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: Waypoints] ';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        var waypoints = jsonp['data'];
+        var waypointOptions = {
+          map : map,
+          zIndex : 2,
+          icon : {
+            url : 'https://maps.gstatic.com/mapfiles/ms2/micons/marina.png',
+            anchor : new google.maps.Point(12, 12),
+            scaledSize : new google.maps.Size(24, 24)
+          }
+        };
+
+        /*** Create a marker for every waypoint ***/
+        // .. do the actual work
+        for ( var index in waypoints) {
+          var curPoint = waypoints[index];
+          curWaypoint = new google.maps.LatLng(curPoint[1], curPoint[2]);
+          waypointOptions.position = curWaypoint;
+          waypointOptions.title = curPoint[0];
+
+          var marker = new google.maps.Marker(waypointOptions);
+        }
+      }
+    });
+  }
+
+  // Get the ship tracks
+  function addShipTracks(map) {
+    canvasLog('refreshing ship tracks since ' + recentShipTimestamp);
+    var query = 'WITH new_sds AS (SELECT *, ROW_NUMBER() OVER (ORDER BY UnixTimestamp ASC) AS row FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SDS_VIEW] WHERE UnixTimestamp >' + recentShipTimestamp + ')';
+    query += ', num_tracks AS (SELECT COUNT(*) as num_tracks FROM new_sds)';
+    query += ', granularity AS (SELECT CASE WHEN num_tracks < 1000 THEN 1 ELSE CONVERT(INT, (num_tracks+999)/1000) END AS granularity FROM num_tracks) ';
+    query += 'SELECT Lat, Lon, UnixTimestamp ';
+    query += 'FROM new_sds, num_tracks, granularity ';
+    query += 'WHERE (row-num_tracks) % granularity = 0 ';
+    query += 'ORDER BY UnixTimestamp ASC';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        tracks = jsonp['data'];
+        if (tracks.length == 0) {
+          canvasLog('no new track points');
+          return;
+        } else {
+          canvasLog(tracks.length + ' new track points');
+        }
+
+        /*** Create a circle for every point ***/
+        // .. the current point and timestamp
+        var curPoint;
+        var curTimestamp;
+        // .. common options for every circle
+        var circleOptions = {
+          fillColor : '#FF0000',
+          fillOpacity : 1,
+          strokeOpacity : 0,
+          clickable : true,
+          map : map,
+          radius : 4000
+        };
+        // .. do the actual work
+        for ( var index in tracks) {
+          var curTrack = tracks[index];
+          curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
+          curTimestamp = curTrack[2];
+          circleOptions.center = curPoint;
+          var circle = new google.maps.Circle(circleOptions);
+          google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+
+          /* Update map bounds */
+          mapBounds.extend(curPoint);
+        }
+
+        // Save the most recent point
+        canvasLog('timestamp = ' + curTimestamp);
+        recentShipLocation = curPoint;
+        recentShipTimestamp = curTimestamp;
+
+        setupShipIcon(map);
+
+        /* Re-zoom the map */
+        zoomMapToBounds(map);
+      }
+    });
+  }
+
+  function initialize() {
+    // Create the map
+    var mapOptions = {
+      center : armbrustLab,
+      panControl : true,
+      streetViewControl : false,
+      zoomControl : true,
+      zoom : 8,
+      mapTypeId : google.maps.MapTypeId.SATELLITE
+    };
+    var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+
+    // Label the cruise waypoints
+    setupWaypoints(map);
+
+    // Add ship tracks
+    addShipTracks(map);
+
+    // Refresh timer
+    setInterval(function() {
+      addShipTracks(map);
+    }, REFRESH_TIME_MILLIS);
+  }
+
+  google.maps.event.addDomListener(window, 'load', initialize);
+</script>
+<script type="text/javascript" src="js/jquery.min.js">
+  
+</script>
+<script type="text/javascript" src="js/d3.min.js">
+  
+</script>
+<script type="text/javascript" src="js/nv.d3.min.js">
+  
+</script>
+<script type="text/javascript">
+  function plotSqlData(data, svgName) {
+    // Step 1: convert the data over to nvd3's format
+    // .. Ensure that there are exactly 2 columns, X and Y
+    if (data.header.length < 2) {
+      alert('Query ' + data.sql + ' returned ' + data.header.length + ' columns, needs at least 2');
+      return;
+    }
+    // The datum for the scatter plot
+    var datum = new Array(data.header.length - 1);
+    for ( var col = 0; col < data.header.length - 1; ++col) {
+      datum[col] = {
+        values : [],
+        key : data.header[col + 1]
+      };
+    }
+    // Construct the (x,y) tuples
+    for ( var i in data.data) {
+      xval = data.data[i][0];
+      if (data.type[0] == 'datetime') {
+        xval = new Date(xval).getTime();
+      }
+      for ( var col = 0; col < data.header.length - 1; ++col) {
+        yval = data.data[i][col + 1];
+        datum[col].values.push({
+          x : xval,
+          y : yval
+        });
+      }
+    }
+    // X and Y labels
+    var xLabel = data.header[0];
+    var yLabel = data.header[1];
+    // For multiple columns, set the label to the common prefix
+    if (data.header.length > 2) {
+      for ( var col = 2; col < data.header.length; ++col) {
+        var curHeader = data.header[col];
+        for ( var i = 0; i < yLabel.length && i < curHeader.length; ++i) {
+          if (yLabel[i] == curHeader[i]) {
+            continue;
+          } else {
+            yLabel = yLabel.substring(0, i);
+          }
+        }
+      }
+    }
+    // X tick formatting
+    if (data.type[0] == 'datetime') {
+      xFormat = function(d) {
+        return d3.time.format('%m/%d-%H:%M')(new Date(d));
+      }
+    } else {
+      xFormat = d3.format('.02f');
+    }
+
+    nv.addGraph(function() {
+      var chart = nv.models.scatterChart();
+      chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
+      chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
+
+      if (datum.length == 1) {
+        chart.showLegend(false);
+      }
+
+      d3.select(svgName).datum(datum).call(chart);
+
+      /*
+      // So it auto-resizes
+          nv.utils.windowResize(function() {
+            d3.select(svgName).call(chart)
+          });
+       */
+      return chart;
+    });
+  }
+  function plotSqlQuery(query, svgId) {
+    var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        plotSqlData(jsonp, svgId);
+      }
+    });
+  }
+
+  function getStreamPressure() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.Seaflow: Stream pressure vs Time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#stream-svg');
+  }
+
+  function getEvtOppRatio() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: Evt-Opp ratio vs Time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#evt-opp-svg');
+  }
+
+  function getEventRate() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: Event Rate] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#event-rate-svg');
+  }
+
+  function getD1D2() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: D1D2 vs Time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#d1d2-svg');
+  }
+
+  function getPopConc() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: population-wise concentrations] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#pop-conc-svg');
+  }
+
+  function getFscSignal() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: beads FSC signal] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#fsc-svg');
+  }
+
+  function getTempSalFluo() {
+    var query = 'SELECT DateTime,Temperature ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: Temp,Salinity,Fluo vs time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#temp-svg');
+
+    var query = 'SELECT DateTime,Salinity ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: Temp,Salinity,Fluo vs time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#sal-svg');
+
+    var query = 'SELECT DateTime,Fluorescence ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: Temp,Salinity,Fluo vs time] ';
+    query += 'ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#fluo-svg');
+  }
+
+  function getVelocity() {
+    var query = 'SELECT * FROM (SELECT TOP 500 [DateTime],[Velocity (m/s)] ';
+    query += 'FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.SeaFlow: velocity] ';
+    query += 'WHERE [Velocity (m/s)] IS NOT NULL ';
+    query += 'ORDER BY [DateTime] DESC) x ORDER BY [DateTime] ASC';
+    plotSqlQuery(query, '#velo-svg');
+  }
+
+  function makeDataPlots() {
+    getStreamPressure();
+    getEvtOppRatio();
+    getEventRate();
+    getD1D2();
+    getFscSignal();
+    // getTempSalFluo();
+    getPopConc();
+    getVelocity();
+    updateLastTimes();
+  }
+
+  makeDataPlots();
+  setInterval(makeDataPlots, REFRESH_TIME_MILLIS);
+
+  function updateLastTimes() {
+    var query = 'SELECT [SDS Lag], [STATS Lag] FROM ';
+    query += '(SELECT DATEDIFF(minute, MAX([DateTime]), GETDATE()) AS [SDS Lag] FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.sds_view]) sds, ';
+    query += '(SELECT DATEDIFF(minute, MAX([DateTime]), GETDATE()) AS [STATS Lag] FROM [seaflow.viz@gmail.com].[KM1314 snapshot of seaflow.viz@gmail.com.stats_view]) stats';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        elapsed = jsonp['data'];
+        console.log(elapsed[0][0] + " minutes since last SDS entry.");
+        console.log(elapsed[0][1] + " minutes since last STATS entry.");
+        $("#sds_time").text(elapsed[0][0] + " minutes since last SDS entry.");
+        $("#stats_time").text(elapsed[0][1] + " minutes since last STATS entry.");
+      }
+    });
+  }
+</script>
+</head>
+<body>
+	<div id="topleft">
+		<a href="http://escience.washington.edu/" target="_blank"><img
+			src="logos/eScience.png" height="50"></a><a href="http://nsf.gov/"
+			target="_blank"><img src="logos/nsf.png" height="50"></a><a
+			href="http://www.moore.org/" target="_blank"><img
+			src="logos/moore.png" height="50"></a>
+	</div>
+	<div id="topright">
+		<a href="https://sqlshare.escience.washington.edu/" target="_blank"><img
+			src="logos/sqlshare.png" height="50"></a>
+	</div>
+	<div id="topbar">R/V Kilo Moana cruise and SeaFlow dashboard</div>
+	<div id="container">
+		<div class="vert50">
+			<div class='horiz25'>
+				<p>This dashboard displays a live feed of sensors on board the
+					R/V Kilo Moana during a research cruise in the northeast Pacific
+					Ocean. Data are displayed in 3-minute intervals over the past 25
+					hours.</p>
+				<p>At right, you can see the vessel's cruise track and current
+					position, extracted from GPS coordinates in the ship's data systems
+					(SDS). From the GPS tracks, we compute the vessel's velocity over
+					time.</p>
+				<p>The panels below monitor performance of the SeaFlow
+					instrument, e.g., the pressure of seawater through the pump system.
+					At bottom right, we show live statistics (STATS) of the
+					phytoplankton population.</p>
+
+				<label id='sds_time'></label><br> <label id='stats_time'></label>
+				<p>
+					Send feedback to <a
+						href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
+				</p>
+			</div>
+			<div id="map-canvas" class="horiz50"></div>
+			<div class='horiz25'>
+				<svg id="velo-svg" />
+			</div>
+		</div>
+		<div class="vert50">
+			<div class='horiz25'>
+				<div class='vert50'>
+					<svg id="stream-svg" />
+				</div>
+				<div class='vert50'>
+					<svg id="d1d2-svg" />
+				</div>
+			</div>
+			<div class='horiz25'>
+				<div class="vert33">
+					<svg id="fsc-svg" />
+				</div>
+				<div class="vert33">
+					<svg id="evt-opp-svg" />
+				</div>
+				<div class="vert33">
+					<svg id="event-rate-svg" />
+				</div>
+			</div>
+			<!-- 			<div class='horiz25'>
+				<div class='vert33'>
+					<svg id="temp-svg" />
+				</div>
+				<div class='vert33'>
+					<svg id="sal-svg" />
+				</div>
+				<div class='vert33'>
+					<svg id="fluo-svg" />
+				</div>
+			</div>
+ -->
+			<div class='horiz50'>
+				<svg id="pop-conc-svg" />
+			</div>
+		</div>
+	</div>
+	<div id="bottombar">This research was sponsored by US National
+		Science Foundation award 1064505, the Gordon and Betty Moore
+		Foundation, and Microsoft Research.</div>
+</body>
+</html>
