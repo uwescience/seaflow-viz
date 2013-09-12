@@ -129,7 +129,8 @@ body {
 <script type="text/javascript">
   // Useful global variables
   // .. the refresh time of the page
-  var REFRESH_TIME_MILLIS = 60 * 1000;
+  // Disabled (set to 1 week) -- the cruise is over!
+  var REFRESH_TIME_MILLIS = 1000*86400*7;
   // .. the geo-coordinates of the Armbrust Lab
   var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
   // The ship tracks
@@ -530,6 +531,11 @@ body {
         elapsed = jsonp['data'];
         console.log(elapsed[0][0] + " minutes since last SDS entry.");
         console.log(elapsed[0][1] + " minutes since last STATS entry.");
+        // Don't do anything, the cruise is over.
+        console.log("here");
+        $("#sds_time").text("This cruise is over, there will be no more updates.");
+        return;
+        // old code here
         $("#sds_time").text(elapsed[0][0] + " minutes since last SDS entry.");
         $("#stats_time").text(elapsed[0][1] + " minutes since last STATS entry.");
       }
