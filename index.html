@@ -446,9 +446,9 @@ body {
   }
 
   function getVelocity() {
-    var query = 'SELECT * FROM (SELECT TOP 500 [DateTime],[Velocity (m/s)] ';
+    var query = 'SELECT * FROM (SELECT TOP 500 [DateTime],[Velocity (knots)] ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: velocity] ';
-    query += 'WHERE [Velocity (m/s)] IS NOT NULL ';
+    query += 'WHERE [Velocity (knots)] IS NOT NULL ';
     query += 'ORDER BY [DateTime] DESC) x ORDER BY [DateTime] ASC';
     plotSqlQuery(query, '#velo-svg');
   }
