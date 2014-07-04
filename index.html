@@ -133,7 +133,7 @@ body {
   // .. the geo-coordinates of the Armbrust Lab
   var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
   // The ship tracks
-  var recentShipTimestamp = 0;
+  var recentShipTimestamp = new Date(0);
   var recentShipLocation = armbrustLab;
   // .. the marker for the ship
   var shipMarker = new google.maps.Marker({
@@ -141,7 +141,7 @@ body {
     position : recentShipLocation,
     zIndex : 1,
     icon : {
-      url : 'ships/kilo_moana_logo.png',
+      url : 'ships/rv_melville.png',
       anchor : new google.maps.Point(20, 20),
       scaledSize : new google.maps.Size(40, 40)
     }
@@ -197,56 +197,14 @@ body {
     }
   }
 
-  // Add the waypoints
-  function setupWaypoints(map) {
-    canvasLog("setting waypoints for the cruise");
-    var query = 'SELECT Name, Latitude, Longitude ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Waypoints] ';
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        var waypoints = jsonp['data'];
-        var waypointOptions = {
-          map : map,
-          zIndex : 2,
-          icon : {
-            url : 'https://maps.gstatic.com/mapfiles/ms2/micons/marina.png',
-            anchor : new google.maps.Point(12, 12),
-            scaledSize : new google.maps.Size(24, 24)
-          }
-        };
-
-        /*** Create a marker for every waypoint ***/
-        // .. do the actual work
-        for ( var index in waypoints) {
-          var curPoint = waypoints[index];
-          curWaypoint = new google.maps.LatLng(curPoint[1], curPoint[2]);
-          waypointOptions.position = curWaypoint;
-          waypointOptions.title = curPoint[0];
-
-          var marker = new google.maps.Marker(waypointOptions);
-        }
-      }
-    });
-  }
-
   // Get the ship tracks
   function addShipTracks(map) {
     canvasLog('refreshing ship tracks since ' + recentShipTimestamp);
-    var query = 'WITH new_sds AS (SELECT *, ROW_NUMBER() OVER (ORDER BY UnixTimestamp ASC) AS row FROM [seaflow.viz@gmail.com].[SDS_VIEW] WHERE UnixTimestamp >' + recentShipTimestamp + ')';
-    query += ', num_tracks AS (SELECT COUNT(*) as num_tracks FROM new_sds)';
-    query += ', granularity AS (SELECT CASE WHEN num_tracks < 1000 THEN 1 ELSE CONVERT(INT, (num_tracks+999)/1000) END AS granularity FROM num_tracks) ';
-    query += 'SELECT Lat, Lon, UnixTimestamp ';
-    query += 'FROM new_sds, num_tracks, granularity ';
-    query += 'WHERE (row-num_tracks) % granularity = 0 ';
-    query += 'ORDER BY UnixTimestamp ASC';
+    console.log(recentShipTimestamp);
+    var query = 'SELECT lat, lon, [time]\n';
+    query += 'FROM [seaflow.viz@gmail.com].[STATS_VIEW]\n';
+    query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
+    query += 'ORDER BY [time] ASC';
     $.ajax({
       url : sqlshare_query_url + encodeURIComponent(query),
       dataType : 'jsonp',
@@ -294,7 +252,7 @@ body {
         // Save the most recent point
         canvasLog('timestamp = ' + curTimestamp);
         recentShipLocation = curPoint;
-        recentShipTimestamp = curTimestamp;
+        recentShipTimestamp = new Date(curTimestamp);
 
         setupShipIcon(map);
 
@@ -315,9 +273,6 @@ body {
       mapTypeId : google.maps.MapTypeId.SATELLITE
     };
     var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
-
-    // Label the cruise waypoints
-    setupWaypoints(map);
 
     // Add ship tracks
     addShipTracks(map);
@@ -349,7 +304,7 @@ body {
     }
     // The datum for the scatter plot
     var datum = new Array(data.header.length - 1);
-    for ( var col = 0; col < data.header.length - 1; ++col) {
+    for (var col = 0; col < data.header.length - 1; ++col) {
       datum[col] = {
         values : [],
         key : data.header[col + 1]
@@ -361,7 +316,7 @@ body {
       if (data.type[0] == 'datetime') {
         xval = new Date(xval).getTime();
       }
-      for ( var col = 0; col < data.header.length - 1; ++col) {
+      for (var col = 0; col < data.header.length - 1; ++col) {
         yval = data.data[i][col + 1];
         datum[col].values.push({
           x : xval,
@@ -374,9 +329,9 @@ body {
     var yLabel = data.header[1];
     // For multiple columns, set the label to the common prefix
     if (data.header.length > 2) {
-      for ( var col = 2; col < data.header.length; ++col) {
+      for (var col = 2; col < data.header.length; ++col) {
         var curHeader = data.header[col];
-        for ( var i = 0; i < yLabel.length && i < curHeader.length; ++i) {
+        for (var i = 0; i < yLabel.length && i < curHeader.length; ++i) {
           if (yLabel[i] == curHeader[i]) {
             continue;
           } else {
@@ -462,7 +417,7 @@ body {
   function getPopConc() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise concentrations] ';
-    query += 'ORDER BY [DateTime] ASC';
+    query += 'ORDER BY [time] ASC';
     plotSqlQuery(query, '#pop-conc-svg');
   }
 
@@ -499,14 +454,14 @@ body {
   }
 
   function makeDataPlots() {
-    getStreamPressure();
-    getEvtOppRatio();
-    getEventRate();
-    getD1D2();
-    getFscSignal();
+    //     getStreamPressure();
+    //     getEvtOppRatio();
+    //     getEventRate();
+    //     getD1D2();
+    //     getFscSignal();
     // getTempSalFluo();
     getPopConc();
-    getVelocity();
+    //     getVelocity();
     updateLastTimes();
   }
 
@@ -514,9 +469,7 @@ body {
   setInterval(makeDataPlots, REFRESH_TIME_MILLIS);
 
   function updateLastTimes() {
-    var query = 'SELECT [SDS Lag], [STATS Lag] FROM ';
-    query += '(SELECT DATEDIFF(minute, MAX([DateTime]), GETDATE()) AS [SDS Lag] FROM [seaflow.viz@gmail.com].[sds_view]) sds, ';
-    query += '(SELECT DATEDIFF(minute, MAX([DateTime]), GETDATE()) AS [STATS Lag] FROM [seaflow.viz@gmail.com].[stats_view]) stats';
+    var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[stats_view]';
     $.ajax({
       url : sqlshare_query_url + encodeURIComponent(query),
       dataType : 'jsonp',
@@ -528,10 +481,8 @@ body {
       },
       success : function(jsonp) {
         elapsed = jsonp['data'];
-        console.log(elapsed[0][0] + " minutes since last SDS entry.");
-        console.log(elapsed[0][1] + " minutes since last STATS entry.");
-        $("#sds_time").text(elapsed[0][0] + " minutes since last SDS entry.");
-        $("#stats_time").text(elapsed[0][1] + " minutes since last STATS entry.");
+        console.log(elapsed[0][0] + " minutes since last entry.");
+        $("#stats_time").text(elapsed[0][0] + " minutes since last entry.");
       }
     });
   }
@@ -549,14 +500,14 @@ body {
 		<a href="https://sqlshare.escience.washington.edu/" target="_blank"><img
 			src="logos/sqlshare.png" height="50"></a>
 	</div>
-	<div id="topbar">R/V Kilo Moana cruise and SeaFlow dashboard</div>
+	<div id="topbar">SeaFlow dashboard</div>
 	<div id="container">
 		<div class="vert50">
 			<div class='horiz25'>
-				<p>This dashboard displays a live feed of sensors on board the
-					R/V Kilo Moana during a research cruise in the northeast Pacific
-					Ocean. Data are displayed in 3-minute intervals over the past 25
-					hours.</p>
+				<p>This dashboard displays a live feed of the SeaFlow data
+					during a research cruise. Data are collected continuously,
+					processed in real time and displayed in 3-minute intervals over the
+					past 25 hours.</p>
 				<p>At right, you can see the vessel's cruise track and current
 					position, extracted from GPS coordinates in the ship's data systems
 					(SDS). From the GPS tracks, we compute the vessel's velocity over
