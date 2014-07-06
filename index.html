@@ -155,28 +155,9 @@ body {
   // The log buffer
   var logbuffer = '';
 
-  function canvasLog(message) {
-    console.log(message);
-    return;
-    logbuffer = logbuffer + ' ** ' + message;
-    var LOG_SIZE = 100;
-    if (logbuffer.length > LOG_SIZE) {
-      logbuffer = logbuffer.substring(logbuffer.length - LOG_SIZE);
-    }
-    // Create the log canvas
-    var div = document.getElementById("log-div");
-    var canvas = document.getElementById("log-canvas");
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-    var context = canvas.getContext("2d");
-    context.fillStyle = "blue";
-    context.font = "24px Helvetica";
-    context.fillText(logbuffer, 0, 24);
-  }
-
   // Put the ship icon at the most recent location
   function setupShipIcon(map) {
-    canvasLog("setting ship at recent " + recentShipLocation);
+    console.log("setting ship at recent " + recentShipLocation);
     shipMarker.setMap(map);
     shipMarker.setPosition(recentShipLocation);
   }
@@ -199,9 +180,8 @@ body {
 
   // Get the ship tracks
   function addShipTracks(map) {
-    canvasLog('refreshing ship tracks since ' + recentShipTimestamp);
-    console.log(recentShipTimestamp);
-    var query = 'SELECT lat, lon, [time]\n';
+    console.log('refreshing ship tracks since ' + recentShipTimestamp);
+    var query = 'SELECT TOP 500 lat, lon, [time]\n';
     query += 'FROM [seaflow.viz@gmail.com].[STATS_VIEW]\n';
     query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
     query += 'ORDER BY [time] ASC';
@@ -217,10 +197,10 @@ body {
       success : function(jsonp) {
         tracks = jsonp['data'];
         if (tracks.length == 0) {
-          canvasLog('no new track points');
+          console.log('no new track points');
           return;
         } else {
-          canvasLog(tracks.length + ' new track points');
+          console.log(tracks.length + ' new track points');
         }
 
         /*** Create a circle for every point ***/
@@ -250,7 +230,7 @@ body {
         }
 
         // Save the most recent point
-        canvasLog('timestamp = ' + curTimestamp);
+        console.log('timestamp = ' + curTimestamp);
         recentShipLocation = curPoint;
         recentShipTimestamp = new Date(curTimestamp);
 
