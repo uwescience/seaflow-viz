@@ -137,13 +137,13 @@ body {
   var recentShipLocation = armbrustLab;
   // .. the marker for the ship
   var shipMarker = new google.maps.Marker({
-    clickable : false,
-    position : recentShipLocation,
-    zIndex : 1,
-    icon : {
-      url : 'ships/rv_melville_flip.png',
-      anchor : new google.maps.Point(35, 40),
-      scaledSize : new google.maps.Size(40, 40)
+    clickable: false,
+    position: recentShipLocation,
+    zIndex: google.MAX_ZINDEX+1,
+    icon: {
+      url: 'ships/rv_melville_flip.png',
+      anchor: new google.maps.Point(35, 40),
+      scaledSize: new google.maps.Size(40, 40)
     }
   });
   // The bounds of the known points in the map
@@ -167,13 +167,13 @@ body {
   }
 
   var infoBox = new InfoBox({
-    alignBottom : true,
+    alignBottom: true,
   });
   // (ugly?) Workarounds for Javascript scoping. Otherwise it always uses the last-created `circle` object.
   function _makeMouseover(c) {
     return function() {
-      infoBox.setContent('<div class="mapInfoWindow">' + c.getCenter().toUrlValue() + '</div>');
-      infoBox.setPosition(c.getCenter());
+      infoBox.setContent('<div class="mapInfoWindow">' + c.getPosition().toUrlValue() + '</div>');
+      infoBox.setPosition(c.getPosition());
       infoBox.open(c.getMap());
     }
   }
@@ -181,20 +181,20 @@ body {
   // Get the ship tracks
   function addShipTracks(map) {
     console.log('refreshing ship tracks since ' + recentShipTimestamp);
-    var query = 'SELECT TOP 500 lat, lon, [time]\n';
+    var query = 'SELECT * FROM (SELECT TOP 500 lat, lon, [time]\n';
     query += 'FROM [seaflow.viz@gmail.com].[STATS_VIEW]\n';
     query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
-    query += 'ORDER BY [time] ASC';
+    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
     $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
+      url: sqlshare_query_url + encodeURIComponent(query),
+      dataType: 'jsonp',
+      type: 'GET',
+      jsonp: 'jsonp',
+      crossDomain: 'true',
+      error: function(xhr, ts, et) {
         alert("error errorThrow:" + et);
       },
-      success : function(jsonp) {
+      success: function(jsonp) {
         tracks = jsonp['data'];
         if (tracks.length == 0) {
           console.log('no new track points');
@@ -209,20 +209,23 @@ body {
         var curTimestamp;
         // .. common options for every circle
         var circleOptions = {
-          fillColor : '#FF0000',
-          fillOpacity : 1,
-          strokeOpacity : 0,
-          clickable : true,
-          map : map,
-          radius : 4000
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: '#FF0000',
+            fillOpacity: 0.5,
+            strokeOpacity: 0,
+            scale: 1,
+            clickable: true
+          }
         };
         // .. do the actual work
         for ( var index in tracks) {
           var curTrack = tracks[index];
           curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
           curTimestamp = curTrack[2];
-          circleOptions.center = curPoint;
-          var circle = new google.maps.Circle(circleOptions);
+          circleOptions.position = curPoint;
+          var circle = new google.maps.Marker(circleOptions);
+          circle.setMap(map);
           google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
 
           /* Update map bounds */
@@ -245,12 +248,12 @@ body {
   function initialize() {
     // Create the map
     var mapOptions = {
-      center : armbrustLab,
-      panControl : true,
-      streetViewControl : false,
-      zoomControl : true,
-      zoom : 8,
-      mapTypeId : google.maps.MapTypeId.SATELLITE
+      center: armbrustLab,
+      panControl: true,
+      streetViewControl: false,
+      zoomControl: true,
+      zoom: 8,
+      mapTypeId: google.maps.MapTypeId.SATELLITE
     };
     var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 
@@ -286,8 +289,8 @@ body {
     var datum = new Array(data.header.length - 1);
     for (var col = 0; col < data.header.length - 1; ++col) {
       datum[col] = {
-        values : [],
-        key : data.header[col + 1]
+        values: [],
+        key: data.header[col + 1]
       };
     }
     // Construct the (x,y) tuples
@@ -299,8 +302,8 @@ body {
       for (var col = 0; col < data.header.length - 1; ++col) {
         yval = data.data[i][col + 1];
         datum[col].values.push({
-          x : xval,
-          y : yval
+          x: xval,
+          y: yval
         });
       }
     }
@@ -352,15 +355,15 @@ body {
   function plotSqlQuery(query, svgId) {
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
     $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
+      url: sqlshare_query_url + encodeURIComponent(query),
+      dataType: 'jsonp',
+      type: 'GET',
+      jsonp: 'jsonp',
+      crossDomain: 'true',
+      error: function(xhr, ts, et) {
         alert("error errorThrow:" + et);
       },
-      success : function(jsonp) {
+      success: function(jsonp) {
         plotSqlData(jsonp, svgId);
       }
     });
@@ -451,15 +454,15 @@ body {
   function updateLastTimes() {
     var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[stats_view]';
     $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
+      url: sqlshare_query_url + encodeURIComponent(query),
+      dataType: 'jsonp',
+      type: 'GET',
+      jsonp: 'jsonp',
+      crossDomain: 'true',
+      error: function(xhr, ts, et) {
         alert("error errorThrow:" + et);
       },
-      success : function(jsonp) {
+      success: function(jsonp) {
         elapsed = jsonp['data'];
         console.log(elapsed[0][0] + " minutes since last entry.");
         $("#stats_time").text(elapsed[0][0] + " minutes since last entry.");
