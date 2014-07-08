@@ -278,7 +278,7 @@ body {
   
 </script>
 <script type="text/javascript">
-  function plotSqlData(data, svgName) {
+  function plotSqlData(data, svgName, optionalYLabel) {
     // Step 1: convert the data over to nvd3's format
     // .. Ensure that there are exactly 2 columns, X and Y
     if (data.header.length < 2) {
@@ -309,19 +309,10 @@ body {
     }
     // X and Y labels
     var xLabel = data.header[0];
-    var yLabel = data.header[1];
+    var yLabel = optionalYLabel;
     // For multiple columns, set the label to the common prefix
-    if (data.header.length > 2) {
-      for (var col = 2; col < data.header.length; ++col) {
-        var curHeader = data.header[col];
-        for (var i = 0; i < yLabel.length && i < curHeader.length; ++i) {
-          if (yLabel[i] == curHeader[i]) {
-            continue;
-          } else {
-            yLabel = yLabel.substring(0, i);
-          }
-        }
-      }
+    if (!yLabel && data.header.length == 2) {
+      yLabel = data.header[1];
     }
     // X tick formatting
     if (data.type[0] == 'datetime') {
@@ -352,7 +343,7 @@ body {
       return chart;
     });
   }
-  function plotSqlQuery(query, svgId) {
+  function plotSqlQuery(query, svgId, optionalYLabel) {
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
     $.ajax({
       url: sqlshare_query_url + encodeURIComponent(query),
@@ -364,7 +355,7 @@ body {
         alert("error errorThrow:" + et);
       },
       success: function(jsonp) {
-        plotSqlData(jsonp, svgId);
+        plotSqlData(jsonp, svgId, optionalYLabel);
       }
     });
   }
@@ -398,34 +389,28 @@ body {
   }
 
   function getPopConc() {
-    var query = 'SELECT * ';
+    var query = 'SELECT * FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise concentrations] ';
-    query += 'ORDER BY [time] ASC';
-    plotSqlQuery(query, '#pop-conc-svg');
+    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
+    plotSqlQuery(query, '#pop-conc-svg', 'Abundance (10^6 cells/L)');
+    var query = 'SELECT * FROM (SELECT TOP 500 * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise size (fsc_small)] ';
+    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
+    plotSqlQuery(query, '#pop-size-svg', 'Forward scatter');
   }
 
-  function getFscSignal() {
-    var query = 'SELECT * ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: beads FSC signal] ';
-    query += 'ORDER BY [DateTime] ASC';
+  function getBulkRed() {
+    var query = 'SELECT * FROM (SELECT TOP 500 * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: bulk_red vs time] ';
+    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
     plotSqlQuery(query, '#fsc-svg');
   }
 
-  function getTempSalFluo() {
-    var query = 'SELECT DateTime,Temperature ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Temp,Salinity,Fluo vs time] ';
-    query += 'ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#temp-svg');
-
-    var query = 'SELECT DateTime,Salinity ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Temp,Salinity,Fluo vs time] ';
-    query += 'ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#sal-svg');
-
-    var query = 'SELECT DateTime,Fluorescence ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Temp,Salinity,Fluo vs time] ';
-    query += 'ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#fluo-svg');
+  function getTempSal() {
+    var query = 'SELECT salinity,ocean_tmp FROM (SELECT TOP 500 * ';
+    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: salinity vs ocean temperature] ';
+    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
+    plotSqlQuery(query, '#sal-tmp-svg');
   }
 
   function getVelocity() {
@@ -446,6 +431,8 @@ body {
     getPopConc();
 	getVelocity();
     updateLastTimes();
+    getTempSal();
+    getBulkRed();
   }
 
   makeDataPlots();
@@ -514,15 +501,15 @@ body {
 		<div class="vert50">
 			<div class='horiz25'>
 				<div class='vert50'>
-					<svg id="stream-svg" />
+					<svg id="sal-tmp-svg" />
 				</div>
 				<div class='vert50'>
-					<svg id="d1d2-svg" />
+					<svg id="fsc-svg" />
 				</div>
 			</div>
 			<div class='horiz25'>
 				<div class="vert33">
-					<svg id="fsc-svg" />
+					<svg id="d1d2-svg" />
 				</div>
 				<div class="vert33">
 					<svg id="evt-opp-svg" />
@@ -545,6 +532,14 @@ body {
  -->
 			<div class='horiz50'>
 				<svg id="pop-conc-svg" />
+			</div>
+		</div>
+		<div class="vert50">
+		    <div class="horiz50">
+		    &nbsp;
+		    </div>
+			<div class='horiz50'>
+				<svg id="pop-size-svg" />
 			</div>
 		</div>
 	</div>
