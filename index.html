@@ -63,10 +63,69 @@
   }
 
   // Get the ship tracks
+  function initShipTracks(map) {
+    console.log('initializing ship tracks');
+    var query = 'WITH all_tracks AS (SELECT *, ROW_NUMBER() OVER (ORDER BY [time] ASC) AS row FROM [seaflow.viz@gmail.com].[SFL_VIEW]),\n';
+    query += 'track_stats AS (SELECT COUNT(*) as num_tracks, CASE WHEN COUNT(*) < 1000 THEN 1 ELSE convert(int, (COUNT(*)+999)/1000) END AS granularity FROM all_tracks)\n';
+    query += 'SELECT lat, lon\n';
+    query += 'FROM all_tracks, track_stats\n';
+    query += 'WHERE (num_tracks-row) % granularity = 0 AND (num_tracks - row) > 495\n';
+    query += 'ORDER BY [time] ASC';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        tracks = jsonp['data'];
+        if (tracks.length == 0) {
+          console.log('no new track points');
+          return;
+        } else {
+          console.log(tracks.length + ' new track points');
+        }
+
+        /*** Create a circle for every point ***/
+        // .. the current point and timestamp
+        var curPoint;
+        var curTimestamp;
+        // .. common options for every circle
+        var circleOptions = {
+          icon : {
+            path : google.maps.SymbolPath.CIRCLE,
+            fillColor : '#d00000',
+            fillOpacity : 0.5,
+            strokeOpacity : 0,
+            scale : 1,
+            clickable : true
+          }
+        };
+        // .. do the actual work
+        for ( var index in tracks) {
+          var curTrack = tracks[index];
+          curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
+          circleOptions.position = curPoint;
+          var circle = new google.maps.Marker(circleOptions);
+          circle.setMap(map);
+          google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+
+          /* Update map bounds */
+          mapBounds.extend(curPoint);
+        }
+
+        addShipTracks(map);
+      }});
+  }
+  
+  // Get the ship tracks
   function addShipTracks(map) {
     console.log('refreshing ship tracks since ' + recentShipTimestamp);
     var query = 'SELECT * FROM (SELECT TOP 500 lat, lon, [time]\n';
-    query += 'FROM [seaflow.viz@gmail.com].[STATS_VIEW]\n';
+    query += 'FROM [seaflow.viz@gmail.com].[SFL_VIEW]\n';
     query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
     query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
     $.ajax({
@@ -141,8 +200,8 @@
     };
     var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 
-    // Add ship tracks
-    addShipTracks(map);
+    // Initialize ship tracks
+    initShipTracks(map);
 
     // Refresh timer
     setInterval(function() {
