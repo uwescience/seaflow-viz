@@ -426,19 +426,14 @@
 	<div id="topbar">SeaFlow dashboard</div>
 	<div id="container" class="gridly">
 		<div class='text'>
-			<p>This dashboard displays a live feed of the SeaFlow data
-				during a research cruise. Data are collected continuously,
-				processed in real time and displayed in 3-minute intervals over the
-				past 25 hours.</p>
-			<p>At right, you can see the vessel's cruise track and current
-				position, extracted from GPS coordinates in the ship's data systems
-				(SDS). From the GPS tracks, we compute the vessel's velocity over
-				time.</p>
-			<p>The panels below monitor performance of the SeaFlow
-				instrument, e.g., the pressure of seawater through the pump system.
-				At bottom right, we show live statistics (STATS) of the
-				phytoplankton population.</p>
-
+			<p>SeaFlow is a novel underway flow cytometer that continuously measures 
+				the abundance and composition of microbial populations, making it 
+				possible to analyze the equivalent of one sample every three minutes.</p>
+			<p>The dashboard was developed for real-time monitoring of SeaFlow data 
+				as it was telemetered from the vessel. Data are automatically processed
+				on board using our software <a href="https://github.com/uwescience/popcycle" 
+				target="_blank"> Popcycle </a> and displayed in 3-minute intervals over the past 25 hours, 
+				using SQLShare for data management and D3 for visualization</p>
 			<label id='stats_time'></label><br /> <label id='sfl_time'></label>
 			<p>
 				Send feedback to <a
