@@ -77,14 +77,19 @@ body {
 	bottom: 0px;
 }
 
-..gridly: {
+.gridly: {
 	position: relative;
 	width: 1024px;
 }
 
-.square {
+.square.small {
 	width: 160px;
 	height: 160px;
+}
+
+.square.large {
+	width: 500px;
+	height: 500px;
 }
 
 .gmap {

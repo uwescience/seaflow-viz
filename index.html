@@ -214,6 +214,7 @@
 <script type="text/javascript" src="js/d3.min.js"></script>
 <script type="text/javascript" src="js/nv.d3.min.js"></script>
 <script type="text/javascript">
+  var charts = {};
   function plotSqlData(data, svgName, optionalYLabel) {
     // Step 1: convert the data over to nvd3's format
     // .. Ensure that there are exactly 2 columns, X and Y
@@ -260,6 +261,7 @@
 
     nv.addGraph(function() {
       var chart = nv.models.scatterChart();
+      charts[svgName] = chart;
       chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
       chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
 
@@ -448,13 +450,25 @@
 				Research.</p>
 		</div>
 		<div id="map-canvas" class="gmap"></div>
-		<div class="square"><div class="svgwrap"><svg id="velo-svg"/></div></div>
-		<div class="square"><div class="svgwrap"><svg id="sal-tmp-svg"/></div></div>
+		<div class="square small" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
+		<div class="square small" data-svg="sal-tmp-svg"><div class="svgwrap"><svg id="sal-tmp-svg"/></div></div>
 		<div class="pop"><div class="svgwrap"><svg id="pop-conc-svg"/></div></div>
 		<div class="pop"><div class="svgwrap"><svg id="pop-size-svg"/></div></div>
 	</div>
 <script>
   $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: 'off'});
   google.maps.event.addDomListener(window, 'load', initialize);
+  
+  $(document).on("click", ".gridly .square", function(event) {
+    var $this, size;
+    event.preventDefault();
+    event.stopPropagation();
+    $this = $(this);
+    $this.toggleClass('small');
+    $this.toggleClass('large');
+    charts['#' + $this.attr('data-svg')].update();
+    return $('.gridly').gridly('layout');
+  });
+
 </script></body>
 </html>
