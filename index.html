@@ -3,124 +3,8 @@
 <head>
 <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
 <meta name="google" content="notranslate" />
-<style type="text/css">
-html {
-	height: 100%
-}
-
-body {
-	height: 100%;
-	margin: 0;
-	padding: 0;
-	line-height: 18px;
-	font: 12px helvetica, sans-serif;
-}
-
-#topbar {
-	width: 100%;
-	height: 50px;
-	top: 0px;
-	margin: 0;
-	position: absolute;
-	text-align: center;
-	margin-top: 13px;
-	font: 24px helvetica, sans-serif, bold;
-	z-index: 1;
-}
-
-#topleft {
-	height: 50px;
-	top: 0px;
-	left: 0px;
-	margin-left: 5px;
-	margin-top: 5px;
-	position: absolute;
-	z-index: 2;
-}
-
-#topright {
-	height: 50px;
-	top: 0px;
-	right: 0px;
-	margin-right: 5px;
-	margin-top: 5px;
-	position: absolute;
-	z-index: 2;
-}
-
-#bottombar {
-	width: 100%;
-	height: 25px;
-	bottom: 0px;
-	margin: 5;
-	text-align: center;
-	margin-bottom: -5px;
-	position: absolute;
-	z-index: 1;
-}
-
-#bottomleft {
-	height: 25px;
-	bottom: 0px;
-	left: 0px;
-	margin-left: 5px;
-	position: absolute;
-}
-
-#bottomright {
-	height: 25px;
-	bottom: 0px;
-	right: 0px;
-	margin-right: 5px;
-	position: absolute;
-}
-
-.infoBox {
-	font-size: 13px;
-	font-family: helvetica, bold;
-	margin: 5px;
-	padding: 5px;
-	background: white;
-	border-radius: 5px;
-}
-
-#container {
-	width: 1240px;
-	height: 600px;
-	top: 50px;
-	margin: 10px;
-	position: absolute;
-	margin: 10px;
-	bottom: 0px;
-}
-
-.vert50 {
-	width: 100%;
-	height: 50%;
-	margin: 0;
-}
-
-.vert33 {
-	width: 100%;
-	height: 33.33333%;
-	margin: 0;
-}
-
-.horiz50 {
-	width: 50%;
-	height: 100%;
-	float: left;
-	margin: 0;
-}
-
-.horiz25 {
-	width: 25%;
-	height: 100%;
-	float: left;
-	margin: 0;
-}
-</style>
 <link href="css/nv.d3.min.css" rel="stylesheet">
+<link href="css/seaflow.viz.css" rel="stylesheet">
 <script type="text/javascript"
 	src="https://maps.googleapis.com/maps/api/js?sensor=false">
   
@@ -137,13 +21,13 @@ body {
   var recentShipLocation = armbrustLab;
   // .. the marker for the ship
   var shipMarker = new google.maps.Marker({
-    clickable: false,
-    position: recentShipLocation,
-    zIndex: google.MAX_ZINDEX+1,
-    icon: {
-      url: 'ships/rv_melville_flip.png',
-      anchor: new google.maps.Point(35, 40),
-      scaledSize: new google.maps.Size(40, 40)
+    clickable : false,
+    position : recentShipLocation,
+    zIndex : google.MAX_ZINDEX + 1,
+    icon : {
+      url : 'ships/rv_melville_flip.png',
+      anchor : new google.maps.Point(35, 40),
+      scaledSize : new google.maps.Size(40, 40)
     }
   });
   // The bounds of the known points in the map
@@ -167,7 +51,7 @@ body {
   }
 
   var infoBox = new InfoBox({
-    alignBottom: true,
+    alignBottom : true,
   });
   // (ugly?) Workarounds for Javascript scoping. Otherwise it always uses the last-created `circle` object.
   function _makeMouseover(c) {
@@ -186,15 +70,15 @@ body {
     query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
     query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
     $.ajax({
-      url: sqlshare_query_url + encodeURIComponent(query),
-      dataType: 'jsonp',
-      type: 'GET',
-      jsonp: 'jsonp',
-      crossDomain: 'true',
-      error: function(xhr, ts, et) {
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
         alert("error errorThrow:" + et);
       },
-      success: function(jsonp) {
+      success : function(jsonp) {
         tracks = jsonp['data'];
         if (tracks.length == 0) {
           console.log('no new track points');
@@ -209,13 +93,13 @@ body {
         var curTimestamp;
         // .. common options for every circle
         var circleOptions = {
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            fillColor: '#FF0000',
-            fillOpacity: 0.5,
-            strokeOpacity: 0,
-            scale: 1,
-            clickable: true
+          icon : {
+            path : google.maps.SymbolPath.CIRCLE,
+            fillColor : '#FF0000',
+            fillOpacity : 0.5,
+            strokeOpacity : 0,
+            scale : 1,
+            clickable : true
           }
         };
         // .. do the actual work
@@ -248,12 +132,12 @@ body {
   function initialize() {
     // Create the map
     var mapOptions = {
-      center: armbrustLab,
-      panControl: true,
-      streetViewControl: false,
-      zoomControl: true,
-      zoom: 8,
-      mapTypeId: google.maps.MapTypeId.SATELLITE
+      center : armbrustLab,
+      panControl : true,
+      streetViewControl : false,
+      zoomControl : true,
+      zoom : 8,
+      mapTypeId : google.maps.MapTypeId.SATELLITE
     };
     var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 
@@ -265,18 +149,11 @@ body {
       addShipTracks(map);
     }, REFRESH_TIME_MILLIS);
   }
-
-  google.maps.event.addDomListener(window, 'load', initialize);
 </script>
-<script type="text/javascript" src="js/jquery.min.js">
-  
-</script>
-<script type="text/javascript" src="js/d3.min.js">
-  
-</script>
-<script type="text/javascript" src="js/nv.d3.min.js">
-  
-</script>
+<script type="text/javascript" src="js/jquery.min.js"></script>
+<script type="text/javascript" src="js/jquery.gridly.js"></script>
+<script type="text/javascript" src="js/d3.min.js"></script>
+<script type="text/javascript" src="js/nv.d3.min.js"></script>
 <script type="text/javascript">
   function plotSqlData(data, svgName, optionalYLabel) {
     // Step 1: convert the data over to nvd3's format
@@ -289,8 +166,8 @@ body {
     var datum = new Array(data.header.length - 1);
     for (var col = 0; col < data.header.length - 1; ++col) {
       datum[col] = {
-        values: [],
-        key: data.header[col + 1]
+        values : [],
+        key : data.header[col + 1]
       };
     }
     // Construct the (x,y) tuples
@@ -302,8 +179,8 @@ body {
       for (var col = 0; col < data.header.length - 1; ++col) {
         yval = data.data[i][col + 1];
         datum[col].values.push({
-          x: xval,
-          y: yval
+          x : xval,
+          y : yval
         });
       }
     }
@@ -315,12 +192,11 @@ body {
       yLabel = data.header[1];
     }
     // X tick formatting
+    var xFormat = d3.format('.02f');
     if (data.type[0] == 'datetime') {
       xFormat = function(d) {
         return d3.time.format('%m/%d-%H:%M')(new Date(d));
       }
-    } else {
-      xFormat = d3.format('.02f');
     }
 
     nv.addGraph(function() {
@@ -346,15 +222,15 @@ body {
   function plotSqlQuery(query, svgId, optionalYLabel) {
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
     $.ajax({
-      url: sqlshare_query_url + encodeURIComponent(query),
-      dataType: 'jsonp',
-      type: 'GET',
-      jsonp: 'jsonp',
-      crossDomain: 'true',
-      error: function(xhr, ts, et) {
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
         alert("error errorThrow:" + et);
       },
-      success: function(jsonp) {
+      success : function(jsonp) {
         plotSqlData(jsonp, svgId, optionalYLabel);
       }
     });
@@ -428,11 +304,11 @@ body {
     //     getD1D2();
     //     getFscSignal();
     // getTempSalFluo();
-    getPopConc();
-	getVelocity();
     updateLastTimes();
     getTempSal();
     getBulkRed();
+    getPopConc();
+    getVelocity();
   }
 
   makeDataPlots();
@@ -441,18 +317,34 @@ body {
   function updateLastTimes() {
     var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[stats_view]';
     $.ajax({
-      url: sqlshare_query_url + encodeURIComponent(query),
-      dataType: 'jsonp',
-      type: 'GET',
-      jsonp: 'jsonp',
-      crossDomain: 'true',
-      error: function(xhr, ts, et) {
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
         alert("error errorThrow:" + et);
       },
-      success: function(jsonp) {
+      success : function(jsonp) {
         elapsed = jsonp['data'];
-        console.log(elapsed[0][0] + " minutes since last entry.");
-        $("#stats_time").text(elapsed[0][0] + " minutes since last entry.");
+        console.log(elapsed[0][0] + " minutes since last stats entry.");
+        $("#stats_time").text(elapsed[0][0] + " minutes since last stats entry.");
+      }
+    });
+    var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[sfl_view]';
+    $.ajax({
+      url : sqlshare_query_url + encodeURIComponent(query),
+      dataType : 'jsonp',
+      type : 'GET',
+      jsonp : 'jsonp',
+      crossDomain : 'true',
+      error : function(xhr, ts, et) {
+        alert("error errorThrow:" + et);
+      },
+      success : function(jsonp) {
+        elapsed = jsonp['data'];
+        console.log(elapsed[0][0] + " minutes since last sfl entry.");
+        $("#sfl_time").text(elapsed[0][0] + " minutes since last sfl entry.");
       }
     });
   }
@@ -471,80 +363,39 @@ body {
 			src="logos/sqlshare.png" height="50"></a>
 	</div>
 	<div id="topbar">SeaFlow dashboard</div>
-	<div id="container">
-		<div class="vert50">
-			<div class='horiz25'>
-				<p>This dashboard displays a live feed of the SeaFlow data
-					during a research cruise. Data are collected continuously,
-					processed in real time and displayed in 3-minute intervals over the
-					past 25 hours.</p>
-				<p>At right, you can see the vessel's cruise track and current
-					position, extracted from GPS coordinates in the ship's data systems
-					(SDS). From the GPS tracks, we compute the vessel's velocity over
-					time.</p>
-				<p>The panels below monitor performance of the SeaFlow
-					instrument, e.g., the pressure of seawater through the pump system.
-					At bottom right, we show live statistics (STATS) of the
-					phytoplankton population.</p>
+	<div id="container" class="gridly">
+		<div class='text'>
+			<p>This dashboard displays a live feed of the SeaFlow data
+				during a research cruise. Data are collected continuously,
+				processed in real time and displayed in 3-minute intervals over the
+				past 25 hours.</p>
+			<p>At right, you can see the vessel's cruise track and current
+				position, extracted from GPS coordinates in the ship's data systems
+				(SDS). From the GPS tracks, we compute the vessel's velocity over
+				time.</p>
+			<p>The panels below monitor performance of the SeaFlow
+				instrument, e.g., the pressure of seawater through the pump system.
+				At bottom right, we show live statistics (STATS) of the
+				phytoplankton population.</p>
 
-				<label id='stats_time'></label>
-				<p>
-					Send feedback to <a
-						href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
-				</p>
-			</div>
-			<div id="map-canvas" class="horiz50"></div>
-			<div class='horiz25'>
-				<svg id="velo-svg" />
-			</div>
+			<label id='stats_time'></label><br /> <label id='sfl_time'></label>
+			<p>
+				Send feedback to <a
+					href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
+			</p>
+
+			<p>This research was sponsored by US National Science Foundation
+				award 1064505, the Gordon and Betty Moore Foundation, and Microsoft
+				Research.</p>
 		</div>
-		<div class="vert50">
-			<div class='horiz25'>
-				<div class='vert50'>
-					<svg id="sal-tmp-svg" />
-				</div>
-				<div class='vert50'>
-					<svg id="fsc-svg" />
-				</div>
-			</div>
-			<div class='horiz25'>
-				<div class="vert33">
-					<svg id="d1d2-svg" />
-				</div>
-				<div class="vert33">
-					<svg id="evt-opp-svg" />
-				</div>
-				<div class="vert33">
-					<svg id="event-rate-svg" />
-				</div>
-			</div>
-			<!-- 			<div class='horiz25'>
-				<div class='vert33'>
-					<svg id="temp-svg" />
-				</div>
-				<div class='vert33'>
-					<svg id="sal-svg" />
-				</div>
-				<div class='vert33'>
-					<svg id="fluo-svg" />
-				</div>
-			</div>
- -->
-			<div class='horiz50'>
-				<svg id="pop-conc-svg" />
-			</div>
-		</div>
-		<div class="vert50">
-		    <div class="horiz50">
-		    &nbsp;
-		    </div>
-			<div class='horiz50'>
-				<svg id="pop-size-svg" />
-			</div>
-		</div>
+		<div id="map-canvas" class="gmap"></div>
+		<div class="square"><div class="svgwrap"><svg id="velo-svg"/></div></div>
+		<div class="square"><div class="svgwrap"><svg id="sal-tmp-svg"/></div></div>
+		<div class="pop"><div class="svgwrap"><svg id="pop-conc-svg"/></div></div>
+		<div class="pop"><div class="svgwrap"><svg id="pop-size-svg"/></div></div>
 	</div>
-	<div id="bottombar">This research was sponsored by US National
-		Science Foundation award 1064505, the Gordon and Betty Moore
-		Foundation, and Microsoft Research.</div>
-</body>
+<script>
+  $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: 'off'});
+  google.maps.event.addDomListener(window, 'load', initialize);
+</script></body>
 </html>
