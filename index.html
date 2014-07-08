@@ -456,7 +456,7 @@
 		<div class="pop"><div class="svgwrap"><svg id="pop-size-svg"/></div></div>
 	</div>
 <script>
-  $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: 'off'});
+  $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: false});
   google.maps.event.addDomListener(window, 'load', initialize);
   
   $(document).on("click", ".gridly .square", function(event) {
@@ -466,9 +466,12 @@
     $this = $(this);
     $this.toggleClass('small');
     $this.toggleClass('large');
-    charts['#' + $this.attr('data-svg')].update();
-    return $('.gridly').gridly('layout');
-  });
 
+    var svg_name = $this.attr('data-svg');
+    charts['#' + svg_name].update();
+    var ret = $('.gridly').gridly('layout');
+    document.getElementById(svg_name).scrollIntoView();
+    return ret;
+  });
 </script></body>
 </html>
