@@ -388,8 +388,8 @@
       },
       success : function(jsonp) {
         elapsed = jsonp['data'];
-        console.log(elapsed[0][0] + " minutes delay with SeaFlow data on board.");
-        $("#stats_time").text(elapsed[0][0] + " minutes delay with SeaFlow data on board.");
+        console.log(elapsed[0][0] + " minutes delay with ship data.");
+        $("#stats_time").text(elapsed[0][0] + " minutes delay with ship data.");
       }
     });
     // var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[sfl_view]';
