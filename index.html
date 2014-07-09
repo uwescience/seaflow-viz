@@ -388,26 +388,26 @@
       },
       success : function(jsonp) {
         elapsed = jsonp['data'];
-        console.log(elapsed[0][0] + " minutes since last stats entry.");
-        $("#stats_time").text(elapsed[0][0] + " minutes since last stats entry.");
+        console.log(elapsed[0][0] + " minutes delay with SeaFlow data on board.");
+        $("#stats_time").text(elapsed[0][0] + " minutes delay with SeaFlow data on board.");
       }
     });
-    var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[sfl_view]';
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        elapsed = jsonp['data'];
-        console.log(elapsed[0][0] + " minutes since last sfl entry.");
-        $("#sfl_time").text(elapsed[0][0] + " minutes since last sfl entry.");
-      }
-    });
+    // var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[sfl_view]';
+    //$.ajax({
+    //  url : sqlshare_query_url + encodeURIComponent(query),
+    //  dataType : 'jsonp',
+    //  type : 'GET',
+    //  jsonp : 'jsonp',
+    //  crossDomain : 'true',
+    //  error : function(xhr, ts, et) {
+    //   alert("error errorThrow:" + et);
+    //  },
+    //  success : function(jsonp) {
+    //    elapsed = jsonp['data'];
+    //    console.log(elapsed[0][0] + " minutes since last sfl entry.");
+    //    $("#sfl_time").text(elapsed[0][0] + " minutes since last sfl entry.");
+    //  }
+    // });
   }
 </script>
 </head>
