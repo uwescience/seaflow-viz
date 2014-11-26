@@ -207,6 +207,8 @@
     setInterval(function() {
       addShipTracks(map);
     }, REFRESH_TIME_MILLIS);
+
+	makeDataPlots();
   }
 </script>
 <script type="text/javascript" src="js/jquery.min.js"></script>
@@ -372,7 +374,7 @@
     getVelocity();
   }
 
-  makeDataPlots();
+  //makeDataPlots();
   setInterval(makeDataPlots, REFRESH_TIME_MILLIS);
 
   function updateLastTimes() {
