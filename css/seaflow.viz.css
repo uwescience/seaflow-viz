@@ -17,7 +17,7 @@ body {
 	margin: 0;
 	position: absolute;
 	text-align: center;
-	margin-top: 13px;
+	margin-top: 20px;
 	font: 24px helvetica, sans-serif, bold;
 	z-index: 1;
 }
@@ -69,22 +69,22 @@ body {
 
 #container {
 	width: 1240px;
-	height: 600px;
+	height: 500px;
 	top: 50px;
-	margin: 10px;
+	margin: 20px;
 	position: absolute;
-	margin: 10px;
+	margin: 20px;
 	bottom: 0px;
 }
 
 .gridly: {
 	position: relative;
-	width: 1024px;
+	width: 1240px;
 }
 
 .square.small {
-	width: 160px;
-	height: 160px;
+	width: 200px;
+	height: 200px;
 }
 
 .square.large {
@@ -94,21 +94,27 @@ body {
 
 .gmap {
 	width: 500px;
-	height: 325px;
+	height: 500px;
 }
 
 .pop {
-	width: 500px;
+	width: 1000px;
 	height: 300px;
-}
-
-.text {
-	width: 300px;
-	height: 325px;
 }
 
 .svgwrap {
 	position: relative;
 	width: 100%;
 	height: 100%;	
+}
+
+.text {
+	width: 800px;
+	height: 200px;
+}
+
+.caption {
+	width: 500px;
+	height: 50px;
+	margin-top:50px;
 }

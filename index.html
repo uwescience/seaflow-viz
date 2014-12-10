@@ -26,7 +26,7 @@
     zIndex : google.MAX_ZINDEX + 1,
     icon : {
       url : 'ships/rv_kilo_moana_alpha.png',
-      anchor : new google.maps.Point(35, 40),
+      anchor : new google.maps.Point(40, 40),
       scaledSize : new google.maps.Size(40, 40)
     }
   });
@@ -97,10 +97,10 @@
         var circleOptions = {
           icon : {
             path : google.maps.SymbolPath.CIRCLE,
-            fillColor : '#d00000',
+            fillColor : '#FFFFFF',
             fillOpacity : 0.5,
             strokeOpacity : 0,
-            scale : 1,
+            scale : 1.25,
             clickable : true
           }
         };
@@ -155,9 +155,9 @@
           icon : {
             path : google.maps.SymbolPath.CIRCLE,
             fillColor : '#FF0000',
-            fillOpacity : 0.5,
+            fillOpacity : 1,
             strokeOpacity : 0,
-            scale : 1,
+            scale : 1.5,
             clickable : true
           }
         };
@@ -302,29 +302,29 @@
   function getStreamPressure() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[Seaflow: Stream pressure vs Time] ';
-    query += 'ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#stream-svg');
+    query += 'ORDER BY [time] ASC';
+    plotSqlQuery(query, '#stream-svg','Time (GMT)', 'Stream pressure (psi)');
   }
 
   function getEvtOppRatio() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Evt-Opp ratio vs Time] ';
-    query += 'ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#evt-opp-svg');
+    query += 'ORDER BY [time] ASC';
+    plotSqlQuery(query, '#evt-opp-svg','Time (GMT)', 'Virtual Core (% volume)');
   }
 
   function getEventRate() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: Event Rate] ';
-    query += 'ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#event-rate-svg');
+    query += 'ORDER BY [time] ASC';
+    plotSqlQuery(query, '#event-rate-svg','Time (GMT)','Event rate (particles per sec)');
   }
 
   function getD1D2() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: D1D2 vs Time] ';
-    query += 'ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#d1d2-svg');
+    query += 'ORDER BY [time] ASC';
+    plotSqlQuery(query, '#d1d2-svg','Time (GMT)','Optical alignment');
   }
 
   function getPopConc() {
@@ -346,26 +346,34 @@
   }
 
   function getTempSal() {
-    var query = 'SELECT salinity as [Salinity (psu)],ocean_tmp as [Temperature (degC)] FROM (SELECT TOP 500 * ';
+    var query = 'SELECT salinity,ocean_tmp  FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: salinity vs ocean temperature] ';
     query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-    plotSqlQuery(query, '#sal-tmp-svg');
+    plotSqlQuery(query, '#sal-tmp-svg','Salinity (psu)','Temperature (degC)');
+  }
+
+function getPAR() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[seaflow: PAR vs time] ';
+    query += 'ORDER BY [time] ASC';
+    plotSqlQuery(query, '#par-svg','Time (GMT)', 'PAR (w/m2)');
   }
 
   function getVelocity() {
-    var query = 'SELECT DateTime as [Time (GMT)],  [Velocity (knots)] as [Speed (knots)] FROM (SELECT TOP 500 * ';
+    var query = 'SELECT DateTime,  [Velocity (knots)] FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: velocity] ';
     query += 'WHERE [Velocity (knots)] IS NOT NULL ';
     query += 'ORDER BY [DateTime] DESC) x ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#velo-svg');
+    plotSqlQuery(query, '#velo-svg', 'Time (GMT)','Ship speed (knots)');
   }
 
   function makeDataPlots() {
-    //     getStreamPressure();
-    //     getEvtOppRatio();
-    //     getEventRate();
-    //     getD1D2();
-    //     getFscSignal();
+     getStreamPressure();
+      getEvtOppRatio();
+      // getEventRate();
+      //getD1D2();
+      getPAR();
+    // getFscSignal();
     // getTempSalFluo();
     updateLastTimes();
      getVelocity();
@@ -434,33 +442,35 @@
                         the types and abundances of photosynthetic microbial populations in the ocean.</p>
 			      This dashboard allows monitoring of SeaFlow data from land in near real-time 
                         when SeaFlow is deployed remotely on research ships. 
-				Data are automatically processed on board the ship using 
+				Data are automatically processed on board the ship in three minute intervals using 
 				<a href="https://github.com/uwescience/popcycle" target="blank"> Popcycle</a>,
-                        a software program created for processing SeaFlow data. Data are managed using <a href="https://sqlshare.escience.washington.edu/" target="_blank">SQLShare</a> and visualization is created with <a href="http://d3js.org/" target="_blank">D3</a> </p>
+                        a software program created for processing SeaFlow data. Data are managed using <a href="https://sqlshare.escience.washington.edu/" target="_blank">SQLShare</a> and visualization is created with <a href="http://d3js.org/" target="_blank">D3</a>. For performance issues, only the previous 24 hours of data are displayed in the dashboard. </p>
 			<p> This dashboard project is a collaboration betweeen UW School of Oceanography and eScience,
 				bringing together experts in microbial ecology, engineering, and data science.
 				It is sponsored by US National Science Foundation
 				(award 1064505), the Gordon and Betty Moore Foundation, Microsoft
 				Research, and the Simons Foundation. </p>	
-
+                  
+                  <strong><label id='stats_time'></label><br /> <label id='sfl_time'></label></strong>
 			<!-- <font color='ff0000'> cruise is now over </font> -->
 		<!--	<p>
 				Send feedback to <a
 					href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
 			</p> -->
 		</div>
-		<div id="map-canvas" class="gmap"></div>
-		     <div class='text'>
-              <p>The Google map at right shows the location of the ship. Below, the previous 24 hours of data is displayed in three minute intervals. The plot at lower left shows the abundances of various types of photosynthetic microbes, <i>Prochlorococcus</i> (prochloro), <i>Synechococcus</i> (synecho), picoeukayotes (picoeuk), and reference calibration beads. The plot at lower right shows forward scatter, a proxy of cell size for those same types. At far upper right, the ship's speed over the same time span is shown so that one can monitor whether concentrations and abundances of microbes change as the ship's location changes. At far upper right below the ship's speed is a plot of ocean temperatures versus salinity, an indicator of different water masses.</p>  
-               <label id='stats_time'></label><br /> <label id='sfl_time'></label>
-               </div>
-
-            <div class="square small" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
-		<div class="square small" data-svg="sal-tmp-svg"><div class="svgwrap"><svg id="sal-tmp-svg"/></div></div>
-		<div class="pop"><div class="svgwrap"><svg id="pop-conc-svg"/></div></div>
-		<div class="pop"><div class="svgwrap"><svg id="pop-size-svg"/></div></div>
-            </div>
-
+             <div class="square small" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
+	       <div class="square small" data-svg="sal-tmp-svg"><div class="svgwrap"><svg id="sal-tmp-svg"/></div></div>
+             <div class="square small" data-svg="par-svg"><div class="svgwrap"><svg id="par-svg"/></div></div>
+             <div id="map-canvas" class="gmap"></div>
+             <div class="square small" data-svg="stream-svg"><div class="svgwrap"><svg id="stream-svg"/></div></div>
+             <div class="square small" data-svg="evt-opp-svg"><div class="svgwrap"><svg id="evt-opp-svg"/></div></div>
+             <div class='caption'>Abundances (top panel) and Forward scatter (bottom panel), a proxy of cell size, of <i>Prochlorococcus</i> (prochloro)
+                , <i>Synechococcus</i> (synecho), picoeukayotes (picoeuk), and reference calibration beads over time. 
+                Clic on the name of the population to unselect it. </div>
+              <div class="pop"><div class="svgwrap"><svg id="pop-conc-svg"/></div></div>
+  		  <div class="pop"><div class="svgwrap"><svg id="pop-size-svg"/></div></div>
+                           <!-- <div class="square small" data-svg="d1d2-svg"><div class="svgwrap"><svg id="d1d2-svg"/></div></div> -->
+      </div>
 <script>
   $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: false});
   google.maps.event.addDomListener(window, 'load', initialize);
