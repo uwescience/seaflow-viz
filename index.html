@@ -217,7 +217,7 @@
 <script type="text/javascript" src="js/nv.d3.min.js"></script>
 <script type="text/javascript">
   var charts = {};
-  function plotSqlData(data, svgName, optionalYLabel) {
+  function plotSqlData(data, svgName, optionalXLabel, optionalYLabel) {
     // Step 1: convert the data over to nvd3's format
     // .. Ensure that there are exactly 2 columns, X and Y
     if (data.header.length < 2) {
@@ -247,7 +247,7 @@
       }
     }
     // X and Y labels
-    var xLabel = data.header[0];
+    var xLabel = optionalXLabel;
     var yLabel = optionalYLabel;
     // For multiple columns, set the label to the common prefix
     if (!yLabel && data.header.length == 2) {
@@ -257,7 +257,7 @@
     var xFormat = d3.format('.02f');
     if (data.type[0] == 'datetime') {
       xFormat = function(d) {
-        return d3.time.format('%m/%d-%H:%M')(new Date(d));
+        return d3.time.format('%H:%M')(new Date(d));
       }
     }
 
@@ -282,7 +282,7 @@
       return chart;
     });
   }
-  function plotSqlQuery(query, svgId, optionalYLabel) {
+  function plotSqlQuery(query, svgId, optionalXLabel, optionalYLabel) {
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
     $.ajax({
       url : sqlshare_query_url + encodeURIComponent(query),
@@ -294,7 +294,7 @@
         alert("error errorThrow:" + et);
       },
       success : function(jsonp) {
-        plotSqlData(jsonp, svgId, optionalYLabel);
+        plotSqlData(jsonp, svgId, optionalXLabel, optionalYLabel);
       }
     });
   }
@@ -331,11 +331,11 @@
     var query = 'SELECT * FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise concentrations] ';
     query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-    plotSqlQuery(query, '#pop-conc-svg', 'Abundance (10^6 cells/L)');
+    plotSqlQuery(query, '#pop-conc-svg', 'Time (GMT)', 'Abundance (10^6 cells/L)');
     var query = 'SELECT * FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise size (fsc_small)] ';
     query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-    plotSqlQuery(query, '#pop-size-svg', 'Forward scatter');
+    plotSqlQuery(query, '#pop-size-svg', 'Time (GMT)', 'Forward scatter (a.u.)');
   }
 
   function getBulkRed() {
@@ -346,14 +346,14 @@
   }
 
   function getTempSal() {
-    var query = 'SELECT salinity,ocean_tmp FROM (SELECT TOP 500 * ';
+    var query = 'SELECT salinity as [Salinity (psu)],ocean_tmp as [Temperature (degC)] FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: salinity vs ocean temperature] ';
     query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
     plotSqlQuery(query, '#sal-tmp-svg');
   }
 
   function getVelocity() {
-    var query = 'SELECT * FROM (SELECT TOP 500 [DateTime],[Velocity (knots)] ';
+    var query = 'SELECT DateTime as [Time (GMT)],  [Velocity (knots)] as [Speed (knots)] FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: velocity] ';
     query += 'WHERE [Velocity (knots)] IS NOT NULL ';
     query += 'ORDER BY [DateTime] DESC) x ORDER BY [DateTime] ASC';
@@ -368,11 +368,11 @@
     //     getFscSignal();
     // getTempSalFluo();
     updateLastTimes();
-    getTempSal();
-    getBulkRed();
+     getVelocity();
+     getTempSal();
+    // getBulkRed();
     getPopConc();
-    getVelocity();
-  }
+    }
 
   //makeDataPlots();
   setInterval(makeDataPlots, REFRESH_TIME_MILLIS);
@@ -422,44 +422,46 @@
 			src="logos/moore.png" height="50"></a>
                 <a href="http://www.moore.org/" target="_blank"><img
                   src="logos/simons.png" height="50"></a>
-	</div>
+	<!-- </div>
 	<div id="topright">
 		<a href="https://sqlshare.escience.washington.edu/" target="_blank"><img
-			src="logos/sqlshare.png" height="50"></a>
+			src="logos/sqlshare.png" height="50"></a> -->
 	</div>
 	<div id="topbar"> </div>
-	<div id="container" class="gridly">
+	<div id="container" class="gridly"> 
 		<div class='text'>
 			<p><strong><a href="http://armbrustlab.ocean.washington.edu/resources/seaflow" 
-				target="_blank">SeaFlow</a></strong> is a novel underway flow cytometer 
-				that continuously measures the abundance and composition of photosynthetic microbial populations.</p>
-			<p>The dashboard was developed for real-time monitoring of <strong><a 
-				href="http://armbrustlab.ocean.washington.edu/resources/seaflow" 
-				target="_blank">SeaFlow</a></strong> data as it was telemetered from the vessel in real-time. 
-				Data are automatically processed on board using our software 
-				<a href="https://github.com/uwescience/popcycle" target="blank"> Popcycle </a> 
-				and displayed in 3-minute intervals over the past 25 hours, 
-				using SQLShare for data management and D3 for visualization</p>
-			<p> The SeaFlow project is a collaboration betweeen UW School of Oceanography and eScience
-				which brings together experts in microbial ecology, instrumentation, and data science.
-				This research was sponsored by US National Science Foundation
-				award 1064505, the Gordon and Betty Moore Foundation, Microsoft
+				target="_blank">SeaFlow</a></strong>  is a novel continuous flow cytometer that can measure 
+                        the types and abundances of photosynthetic microbial populations in the ocean.</p>
+			      This dashboard allows monitoring of SeaFlow data from land in near real-time 
+                        when SeaFlow is deployed remotely on research ships. 
+				Data are automatically processed on board the ship using 
+				<a href="https://github.com/uwescience/popcycle" target="blank"> Popcycle</a>,
+                        a software program created for processing SeaFlow data. Data are managed using <a href="https://sqlshare.escience.washington.edu/" target="_blank">SQLShare</a> and visualization is created with <a href="http://d3js.org/" target="_blank">D3</a> </p>
+			<p> This dashboard project is a collaboration betweeen UW School of Oceanography and eScience,
+				bringing together experts in microbial ecology, engineering, and data science.
+				It is sponsored by US National Science Foundation
+				(award 1064505), the Gordon and Betty Moore Foundation, Microsoft
 				Research, and the Simons Foundation. </p>	
-				
-			<label id='stats_time'></label><br /> <label id='sfl_time'></label>
+
 			<!-- <font color='ff0000'> cruise is now over </font> -->
 		<!--	<p>
 				Send feedback to <a
 					href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
 			</p> -->
-
 		</div>
 		<div id="map-canvas" class="gmap"></div>
-		<div class="square small" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
+		     <div class='text'>
+              <p>The Google map at right shows the location of the ship. Below, the previous 24 hours of data is displayed in three minute intervals. The plot at lower left shows the abundances of various types of photosynthetic microbes, <i>Prochlorococcus</i> (prochloro), <i>Synechococcus</i> (synecho), picoeukayotes (picoeuk), and reference calibration beads. The plot at lower right shows forward scatter, a proxy of cell size for those same types. At far upper right, the ship's speed over the same time span is shown so that one can monitor whether concentrations and abundances of microbes change as the ship's location changes. At far upper right below the ship's speed is a plot of ocean temperatures versus salinity, an indicator of different water masses.</p>  
+               <label id='stats_time'></label><br /> <label id='sfl_time'></label>
+               </div>
+
+            <div class="square small" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
 		<div class="square small" data-svg="sal-tmp-svg"><div class="svgwrap"><svg id="sal-tmp-svg"/></div></div>
 		<div class="pop"><div class="svgwrap"><svg id="pop-conc-svg"/></div></div>
 		<div class="pop"><div class="svgwrap"><svg id="pop-size-svg"/></div></div>
-	</div>
+            </div>
+
 <script>
   $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: false});
   google.maps.event.addDomListener(window, 'load', initialize);
