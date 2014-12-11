@@ -352,6 +352,20 @@
     plotSqlQuery(query, '#sal-tmp-svg','Salinity (psu)','Temperature (degC)');
   }
 
+function getTEMP() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[seaflow: Temp vs time] ';
+    query += 'ORDER BY [time] ASC';
+    plotSqlQuery(query, '#temp-svg','Time (GMT)', 'Temp (degC)');
+  }
+
+  function getSAL() {
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[seaflow: Salinity vs time] ';
+    query += 'ORDER BY [time] ASC';
+    plotSqlQuery(query, '#sal-svg','Time (GMT)', 'Salinity (psu)');
+  }
+
 function getPAR() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[seaflow: PAR vs time] ';
@@ -368,14 +382,16 @@ function getPAR() {
   }
 
   function makeDataPlots() {
-     getStreamPressure();
-      getEvtOppRatio();
+     // getStreamPressure();
+     //  getEvtOppRatio();
       // getEventRate();
       //getD1D2();
       getPAR();
+      getTEMP();
+      getSAL();
     // getFscSignal();
     // getTempSalFluo();
-    updateLastTimes();
+     updateLastTimes();
      getVelocity();
      getTempSal();
     // getBulkRed();
@@ -422,7 +438,7 @@ function getPAR() {
 </script>
 </head>
 <body>
-	<div id="topleft">
+	<div id="topcenter">
             <a href="http://www.ocean.washington.edu" target="_blank"><img src="logos/ocean.png" height="50"></a>
             <a href="http://escience.washington.edu/" target="_blank"><img src="logos/eScience.png" height="50"></a>
             <a href="http://nsf.gov/" target="_blank"><img src="logos/nsf.png" height="50"></a>
@@ -458,13 +474,15 @@ function getPAR() {
 					href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
 			</p> -->
 		</div>
-             <div class="square small" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
-	       <div class="square small" data-svg="sal-tmp-svg"><div class="svgwrap"><svg id="sal-tmp-svg"/></div></div>
-             <div class="square small" data-svg="par-svg"><div class="svgwrap"><svg id="par-svg"/></div></div>
-             <div id="map-canvas" class="gmap"></div>
-             <div class="square small" data-svg="stream-svg"><div class="svgwrap"><svg id="stream-svg"/></div></div>
-             <div class="square small" data-svg="evt-opp-svg"><div class="svgwrap"><svg id="evt-opp-svg"/></div></div>
-             <div class='caption'>Abundances (top panel) and Forward scatter (bottom panel), a proxy of cell size, of <i>Prochlorococcus</i> (prochloro)
+            <div id="map-canvas" class="gmap"></div>
+            <div class="time" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
+            <div class="time" data-svg="par-svg"><div class="svgwrap"><svg id="par-svg"/></div></div>
+            <div class="time" data-svg="temp-svg"><div class="svgwrap"><svg id="temp-svg"/></div></div>
+            <div class="time" data-svg="sal-svg"><div class="svgwrap"><svg id="sal-svg"/></div></div>
+
+         <!--     <div class="time" data-svg="stream-svg"><div class="svgwrap"><svg id="stream-svg"/></div></div>
+             <div class="time" data-svg="evt-opp-svg"><div class="svgwrap"><svg id="evt-opp-svg"/></div></div>
+ -->         <div class='caption'>Abundances (top panel) and Forward scatter (bottom panel), a proxy of cell size, of <i>Prochlorococcus</i> (prochloro)
                 , <i>Synechococcus</i> (synecho), picoeukayotes (picoeuk), and reference calibration beads over time. 
                 Clic on the name of the population to unselect it. </div>
               <div class="pop"><div class="svgwrap"><svg id="pop-conc-svg"/></div></div>
