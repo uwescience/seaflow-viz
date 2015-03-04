@@ -284,6 +284,7 @@
   }
   function plotSqlQuery(query, svgId, optionalXLabel, optionalYLabel) {
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
+    console.log("in plotSqlQuery");
     $.ajax({
       url : sqlshare_query_url + encodeURIComponent(query),
       dataType : 'jsonp',
@@ -291,9 +292,12 @@
       jsonp : 'jsonp',
       crossDomain : 'true',
       error : function(xhr, ts, et) {
+        console.log("Error");
         alert("error errorThrow:" + et);
       },
       success : function(jsonp) {
+        console.log("success in query");
+        console.log(jsonp);
         plotSqlData(jsonp, svgId, optionalXLabel, optionalYLabel);
       }
     });
@@ -311,14 +315,25 @@
   }
 
 
-  function getTempSal() {
+  /*function getTempSal() {
     var query = 'SELECT salinity,ocean_tmp  FROM (SELECT TOP 500 * ';
     query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: salinity vs ocean temperature] ';
     query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
     plotSqlQuery(query, '#sal-tmp-svg','Salinity (psu)','Temperature (degC)');
+  }*/
+
+  function getTempSal() {
+    console.log("in getTempSal");
+    var query = 'SELECT * ';
+    query += 'FROM [seaflow.viz@gmail.com].[seaflow all query] ';
+    query += 'ORDER BY [time] ASC';
+    /*var query = 'SELECT * FROM (SELECT TOP 500 * ';
+    query += 'FROM [seaflow.viz@gmail.com].[seaflow all query] ';
+    query += 'ORDER BY [time] ASC)';*/
+    plotSqlQuery(query, '#sal-tmp-svg','Salinity (psu)','Temperature (degC)');
   }
 
- function getTEMP() {
+  function getTEMP() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[seaflow: Temp vs time] ';
     query += 'ORDER BY [time] ASC';
@@ -332,7 +347,7 @@
     plotSqlQuery(query, '#sal-svg','Time (GMT)', 'Salinity (psu)');
   }
 
-function getPAR() {
+  function getPAR() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[seaflow: PAR vs time] ';
     query += 'ORDER BY [time] ASC';
@@ -348,13 +363,13 @@ function getPAR() {
   }
 
   function makeDataPlots() {
-      getPAR();
-      getTEMP();
-      getSAL();
+      //getPAR();
+      //getTEMP();
+      //getSAL();
       updateLastTimes();
-      getVelocity();
-      // getTempSal();
-     getPopConc();
+      //getVelocity();
+      getTempSal();
+      //getPopConc();
     }
 
   //makeDataPlots();
@@ -435,6 +450,7 @@ function getPAR() {
 			</p> -->
 		</div>
             <div id="map-canvas" class="gmap"></div>
+            <div class="time" data-svg="sal-temp-svg"><div class="svgwrap"><svg id="sal-temp-svg"/></div></div>
             <div class="time" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
             <div class="time" data-svg="temp-svg"><div class="svgwrap"><svg id="temp-svg"/></div></div>
             <div class="time" data-svg="sal-svg"><div class="svgwrap"><svg id="sal-svg"/></div></div>
