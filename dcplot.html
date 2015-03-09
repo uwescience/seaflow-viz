@@ -6,6 +6,11 @@
 <meta charset="UTF-8">
 
 <link href="css/dc.css" rel="stylesheet" type="text/css">
+<style>
+div#rangeChart g.stack-list {
+  display: none;
+}
+</style>
 </head>
 
 <body>
@@ -15,7 +20,7 @@
 <div id='prochloro_conc'></div>
 <div id='prochloro_size'></div>
 <div id='rangeChart'>
-  <a class='reset' href='javascript:charts["#rangeChart"].filterAll();dc.redrawAll();' style='display: none;'>reset</a><br />
+  <a class='reset' href='javascript:charts["rangeChart"].filterAll();dc.redrawAll();' style='display: none;'>reset</a><br />
 </div>
 
 <script type="text/javascript" src="js/d3.min.js"></script>
