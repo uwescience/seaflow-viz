@@ -6,19 +6,31 @@
 <meta charset="UTF-8">
 
 <link href="css/dc.css" rel="stylesheet" type="text/css">
+
 <style>
-div#rangeChart g.stack-list {
-  display: none;
+html {
+  height: 100%
 }
+
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  line-height: 18px;
+  font: 12px helvetica, sans-serif;
+}
+
 </style>
+
 </head>
 
 <body>
 
 <div id='ocean_tmp'></div>
 <div id='salinity'></div>
-<div id='prochloro_conc'></div>
-<div id='prochloro_size'></div>
+<div id='par'></div>
+<div id='conc'></div>
+<div id='size'></div>
 <div id='rangeChart'>
   <a class='reset' href='javascript:charts["rangeChart"].filterAll();dc.redrawAll();' style='display: none;'>reset</a><br />
 </div>

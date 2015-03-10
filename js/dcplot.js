@@ -48,18 +48,14 @@ function transformData(jsonp) {
             for (var col = 0; col < jsonp.header.length - 1; ++col) {
                 placeholder[jsonp.header[col+1]] = null;
             }
+            placeholder["total_conc"] = null;
             values.push(placeholder);
-            /*var logText = "Added placeholder:";
-            logText += prevTime + "\n" + placeholder.time + "\n" + j.time;
-            console.log(logText);
-            console.log(placeholder);*/
         }
 
         for (var col = 0; col < jsonp.header.length - 1; ++col) {
-            if (true) {
-                j[jsonp.header[col+1]] = jsonp.data[i][col+1];
-            }
+            j[jsonp.header[col+1]] = jsonp.data[i][col+1];
         }
+        j["total_conc"] = j["prochloro_conc"] + j["synecho_conc"] + j["picoeuk_conc"] + j["beads_conc"];
         values.push(j);
         prevTime = j.time;
     }
@@ -71,7 +67,7 @@ function transformData(jsonp) {
 // line charts
 function reduceAdd(key) {
     return function(p, v) {
-        if (p == null && v[key] === null) {
+        if (p === null && v[key] === null) {
             return null;
         }
         return p + v[key];
@@ -80,7 +76,7 @@ function reduceAdd(key) {
 
 function reduceRemove(key) {
     return function(p, v) {
-        if (p == null && v[key] === null) {
+        if (p === null && v[key] === null) {
             return null;
         }
         return p - v[key];
@@ -93,6 +89,8 @@ function reduceInitial() {
 
 // Recalculate y range for values in filterRange.  Must re-render/redraw to
 // update plot.
+// TODO: consider doing this with additional dimensions.  Might be faster than
+// traversing entire data set every time.
 function recalculateY(chart) {
     var filter = chart.filter();
     var valuesInRange = chart.group().all().filter(function(element, index, array) {
@@ -105,9 +103,9 @@ function recalculateY(chart) {
 function plotTimeSeries(ndx, timeDim, key, yAxisLabel) {
     var chart = dc.lineChart("#" + key);
     charts[key] = chart;
-    
+
     var numberFormat = d3.format(".3n");
-    
+
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
     var keyByTimeGroup = timeDim.group().reduce(
         reduceAdd(key), reduceRemove(key), reduceInitial);
@@ -121,7 +119,7 @@ function plotTimeSeries(ndx, timeDim, key, yAxisLabel) {
         .brushOn(false)
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
-        .elasticY(false)
+        .renderHorizontalGridLines(true)
         .dimension(timeDim)
         .group(keyByTimeGroup)
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
@@ -142,11 +140,101 @@ function plotTimeSeries(ndx, timeDim, key, yAxisLabel) {
             }
 
             // Recalculate Y domain
-            recalculateY(chart);
+            //recalculateY(chart);
 
             // Have to render, not redraw, to fix all points in plot
             chart.render();
+            //chart.redraw();
         });
+    chart.render();
+}
+
+function plotPopulations(ndx, timeDim, key, yAxisLabel) {
+    var chart = dc.compositeChart("#" + key);
+    charts[key] = chart;
+
+    var numberFormat = d3.format(".3n");
+
+    var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
+
+    var groups = {};
+    var minMaxY = [0, 0];
+    var compose = [];
+    var prefixes = ["prochloro", "synecho", "picoeuk", "beads"];
+    var legendLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
+    var colors = ["red", "green", "orange", "gray"];
+    for (var i in prefixes) {
+        var prefixKey = prefixes[i] + "_" + key;
+        var group = timeDim.group().reduce(
+            reduceAdd(prefixKey), reduceRemove(prefixKey), reduceInitial);
+        var minMax = d3.extent(group.all(), function(d) { return d.value; });
+        if (minMax[0] <= minMaxY[0]) {
+            minMaxY = minMax[0];
+        }
+        if (minMax[1] > minMaxY[1]) {
+            minMaxY[1] = minMax[1];
+        }
+        compose.push(
+            dc.lineChart(chart)
+                .dimension(timeDim)
+                .group(group, legendLabels[i])
+                .colors(colors[i])
+        );
+    }
+
+    chart
+        .width(768)
+        .height(150)
+        .x(d3.time.scale.utc().domain(minMaxTime))
+        .y(d3.scale.linear().domain(minMaxY))
+        .brushOn(false)
+        .clipPadding(10)
+        .yAxisLabel(yAxisLabel)
+        .renderHorizontalGridLines(true)
+        .dimension(timeDim)
+        .title(function(d) {
+            return d.key + '\n' + d3.format(".3n")(d.value);
+        })
+        .compose(compose)
+        .legend(dc.legend()
+            .x(75)
+            .y(100)
+            .itemHeight(13)
+            .gap(5)
+            .horizontal(true)
+            .autoItemWidth(true)
+        )
+        .childOptions({
+            defined: function(d) {
+                // don't plot segements with missing data
+                return (d.y !== null);
+            }
+        })
+        .on("filtered", function(chart, filter) {
+            // Only draw dots if size of filter range is <= 12 hours
+            var maxDotRange = 1000 * 60 * 60 * 12 * 1;
+            if ((filter[1] - filter[0]) <= maxDotRange) {
+                chart.children().forEach(function(c) {
+                    c.renderDataPoints({
+                        radius: 2,
+                        fillOpacity: 0.8,
+                        strokeOpacity: 0.8
+                    });
+                });
+            } else {
+                chart.children().forEach(function(c) {
+                    c.renderDataPoints(false);
+                });
+            }
+
+            // Recalculate Y domain
+            //recalculateY(chart);
+
+            // Have to render, not redraw, to fix all points in plot
+            chart.render();
+            //chart.redraw();
+        });
+    chart.margins().bottom = 20
     chart.render();
 }
 
@@ -155,36 +243,39 @@ function plotRangeChart(ndx, timeDim) {
     charts["rangeChart"] = rangeChart;
 
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var timeGroup = timeDim.group();
+    var totalConcByTime = timeDim.group().reduce(
+            reduceAdd("total_conc"), reduceRemove("total_conc"), reduceInitial);
+    var minMaxY = d3.extent(totalConcByTime.all(), function(d) { return d.value; });
     rangeChart
         .width(768)
         .height(100)
         .x(d3.time.scale.utc().domain(minMaxTime))
-        .y(d3.scale.linear().domain([0,1]))
+        .y(d3.scale.linear().domain(minMaxY))
         .clipPadding(10)
+        .yAxisLabel("Total Concentration")
         .dimension(timeDim)
-        .group(timeGroup);
-    rangeChart.yAxis().ticks(0);
+        .group(totalConcByTime)
+        .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     rangeChart.render();
     rangeChart.on("filtered", function(chart, filter) {
         charts["ocean_tmp"].focus(filter);
         charts["salinity"].focus(filter);
-        charts["prochloro_conc"].focus(filter);
-        charts["prochloro_size"].focus(filter);
+        charts["par"].focus(filter);
+        charts["conc"].focus(filter);
+        charts["size"].focus(filter);
     });
 }
 
 function plot(jsonp) {
-    data = transformData(jsonp);  // array of JSON objects
-
+    var data = transformData(jsonp);  // array of JSON objects
     var ndx = crossfilter(data);
-
     var timeDim = ndx.dimension(function(d) { return d.time; });
 
     plotTimeSeries(ndx, timeDim, "ocean_tmp", "Temperature (C)");
     plotTimeSeries(ndx, timeDim, "salinity", "Salinity");
-    plotTimeSeries(ndx, timeDim, "prochloro_conc", "Concentration");
-    plotTimeSeries(ndx, timeDim, "prochloro_size", "Size");
+    plotTimeSeries(ndx, timeDim, "par", "PAR");
+    plotPopulations(ndx, timeDim, "conc", "Concentration");
+    plotPopulations(ndx, timeDim, "size", "Size (forward-scatter)");
     plotRangeChart(ndx, timeDim);
 }
 
@@ -192,7 +283,6 @@ function initialize() {
     var query = 'SELECT * ';
     query += 'FROM [seaflow.viz@gmail.com].[seaflow all query] ';
     query += 'ORDER BY [time] ASC';
-    //logSqlQuery(query);
     executeSqlQuery(query, plot);
 }
 
