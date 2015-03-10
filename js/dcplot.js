@@ -1,5 +1,9 @@
 var data;
 var charts = {};
+// Short names for populations in database
+var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
+// Full names for legend
+var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
 
 function executeSqlQuery(query, cb) {
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
@@ -55,7 +59,8 @@ function transformData(jsonp) {
         for (var col = 0; col < jsonp.header.length - 1; ++col) {
             j[jsonp.header[col+1]] = jsonp.data[i][col+1];
         }
-        j["total_conc"] = j["prochloro_conc"] + j["synecho_conc"] + j["picoeuk_conc"] + j["beads_conc"];
+        j["total_conc"] = 0;
+        popNames.forEach(function(n) { j["total_conc"] += j[n + "_conc"]; });
         values.push(j);
         prevTime = j.time;
     }
@@ -97,6 +102,10 @@ function recalculateY(chart) {
             return (element.key >= filter[0] && element.key < filter[1]);
         });
     var minMaxY = d3.extent(valuesInRange, function(d) { return d.value; });
+    // Add 10% headroom above and below
+    var diff = minMaxY[1] - minMaxY[0];
+    minMaxY[0] = minMaxY[0] - (diff * .1);
+    minMaxY[1] = minMaxY[1] + (diff * .1);
     chart.y(d3.scale.linear().domain(minMaxY));
 }
 
@@ -135,12 +144,13 @@ function plotTimeSeries(ndx, timeDim, key, yAxisLabel) {
                     fillOpacity: 0.8,
                     strokeOpacity: 0.8
                 });
+                console.log(chart.yAxisLabel(), chart.yAxisMin(), chart.yAxisMax());
             } else {
                 chart.renderDataPoints(false);
             }
 
             // Recalculate Y domain
-            //recalculateY(chart);
+            recalculateY(chart);
 
             // Have to render, not redraw, to fix all points in plot
             chart.render();
@@ -160,13 +170,11 @@ function plotPopulations(ndx, timeDim, key, yAxisLabel) {
     var groups = {};
     var minMaxY = [0, 0];
     var compose = [];
-    var prefixes = ["prochloro", "synecho", "picoeuk", "beads"];
-    var legendLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
     var colors = ["red", "green", "orange", "gray"];
-    for (var i in prefixes) {
-        var prefixKey = prefixes[i] + "_" + key;
+    for (var i in popNames) {
+        var popKey = popNames[i] + "_" + key;
         var group = timeDim.group().reduce(
-            reduceAdd(prefixKey), reduceRemove(prefixKey), reduceInitial);
+            reduceAdd(popKey), reduceRemove(popKey), reduceInitial);
         var minMax = d3.extent(group.all(), function(d) { return d.value; });
         if (minMax[0] <= minMaxY[0]) {
             minMaxY = minMax[0];
@@ -174,12 +182,12 @@ function plotPopulations(ndx, timeDim, key, yAxisLabel) {
         if (minMax[1] > minMaxY[1]) {
             minMaxY[1] = minMax[1];
         }
-        compose.push(
-            dc.lineChart(chart)
-                .dimension(timeDim)
-                .group(group, legendLabels[i])
-                .colors(colors[i])
-        );
+        var childChart = dc.lineChart(chart)
+            .dimension(timeDim)
+            .group(group, popLabels[i])
+            .colors(colors[i])
+        compose.push(childChart);
+        charts[popKey] = childChart;
     }
 
     chart
@@ -220,6 +228,11 @@ function plotPopulations(ndx, timeDim, key, yAxisLabel) {
                         fillOpacity: 0.8,
                         strokeOpacity: 0.8
                     });
+                });
+                popNames.forEach(function(n) {
+                    var popKey = n + "_" + key;
+                    var c = charts[popKey];
+                    console.log(popKey, c.yAxisMin(), c.yAxisMax());
                 });
             } else {
                 chart.children().forEach(function(c) {
