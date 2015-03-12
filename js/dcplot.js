@@ -1,4 +1,3 @@
-var data;
 var charts = {};
 // Short names for populations in database
 var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
@@ -56,7 +55,7 @@ function transformData(jsonp) {
         // records are missing and add a placeholder empty record. Only need 
         // one placeholder record per gap.  This placeholder record makes it
         // possible to draw line chart with gaps.
-        /*if (i > 0 && (curTime - prevTime) > 4 * msecMinute) {
+        if (i > 0 && (curTime - prevTime) > 4 * msecMinute) {
             sflValues.push({
                 time: new Date(prevTime.getTime() + (3 * msecMinute)),
                 salinity: null,
@@ -72,7 +71,7 @@ function transformData(jsonp) {
                     pop: pn
                 });
             });
-        }*/
+        }
 
         sflValues.push({
             time: curTime,
@@ -104,7 +103,11 @@ function transformData(jsonp) {
 function reduceAdd(key) {
     return function(p, v) {
         p.count++;
-        p.total += v[key];
+        // want to avoid coercing a null p.total to 0 by adding a null
+        // v[key]
+        if (p.total !== null || v[key] !== null) {
+            p.total += v[key];
+        }
         return p;
     }
 }
@@ -112,13 +115,18 @@ function reduceAdd(key) {
 function reduceRemove(key) {
     return function(p, v) {
         p.count--;
-        p.total -= v[key];
+
+        // want to avoid coercing a null p.total to 0 by subtracting
+        // a null v[key]
+        if (p.total !== null || v[key] !== null) {
+            p.total -= v[key];
+        }
         return p;
     }
 }
 
 function reduceInitial() {
-    return { count: 0, total: 0 };
+    return { count: 0, total: null };
 }
 
 // Only return group elements with counts > 0
@@ -193,13 +201,14 @@ function filterByPop(popName, dim) {
     recalculateY(charts["conc"]);
     recalculateY(charts["size"]);
 
-    // Have to render and redraw to get dots drawn properly
+    // Have to render and redraw to get dots and Y Axis scaling drawn properly
     charts["conc"].render();
     charts["size"].render();
     charts["conc"].redraw();
     charts["size"].redraw();
 }
 
+// Add dots to line graphs if time range is small
 function addDots(chart) {
     var filter = chart.filter();
     if (filter) {
