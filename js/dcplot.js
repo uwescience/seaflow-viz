@@ -4,6 +4,8 @@ var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
 // Full names for legend
 var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
 var popLookup = {"prochloro": "Prochlorococcus", "synecho": "Synechococcus", "picoeuk": "Picoeukaryotes", "beads": "Beads"};
+var popFlags = {};
+popNames.forEach(function(p) { popFlags[p] = true; });
 
 function executeSqlQuery(query, cb) {
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
@@ -173,7 +175,6 @@ function recalculateY(chart) {
 
 function preRedrawHandler(chart) {
     var filter = chart.filter();
-    console.log("preRedraw fired");
 
     // Add dots if time range is small
     addDots(chart);
@@ -187,11 +188,14 @@ function preRedrawHandler(chart) {
     chart.render();
 }
 
-function filterByPop(popName, dim) {
-    if (popName !== null) {
-        dim.filter(popName);
+// popFlags should be 
+function filterPops(dim) {
+    if (popFlags === null) {
+        dim.filterAll();  // remove filters
     } else {
-        dim.filterAll();
+        dim.filter(function(d) {
+            return popFlags[d];
+        });
     }
     // Add dots if time range is small
     addDots(charts["conc"]);
@@ -219,7 +223,6 @@ function addDots(chart) {
             strokeOpacity: 0.8
         };
         if ((filter[1] - filter[0]) <= maxDotRange) {
-            console.log("Adding dots");
             if (chart.children !== undefined) {
                 chart.children().forEach(function(c) {
                     c.renderDataPoints(dotOptions);
@@ -259,6 +262,7 @@ function plotLineChart(timeDim, key, yAxisLabel) {
         .brushOn(false)
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
+        .interpolate("basis")
         .dimension(timeDim)
         .group(keyGroup)
         .valueAccessor(function(d) { return d.value.total; })
@@ -306,11 +310,13 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
             .horizontal(true)
             .autoItemWidth(true)
         )
-        .childOptions({
+        .childOptions(
+        {
             defined: function(d) {
                 // don't plot segements with missing data
                 return (d.y !== null);
-            }
+            },
+            interpolate: "basis"
         })
         .on("preRedraw", preRedrawHandler);
     chart.margins().bottom = 20
@@ -330,6 +336,7 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         .height(100)
         .x(d3.time.scale.utc().domain(minMaxTime))
         .y(d3.scale.linear().domain(minMaxY))
+        .interpolate("basis")
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .dimension(timeDim)
@@ -365,7 +372,7 @@ function plot(jsonp) {
 
     plotRangeChart(timeDim, "total_conc", "Total Abundance (10^6 cells/L)");
 
-    setTimeout(function() {
+    /*setTimeout(function() {
         //var first = charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; })[0];
         //console.log(first.key[0], first.key[1], first.value.total, first.value.count);
         //console.log("filtering for prochloro");
@@ -378,7 +385,20 @@ function plot(jsonp) {
             //console.log(charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; }));
         }, 5000);
 
-    }, 5000);
+    }, 5000);*/
+    popNames.forEach(function(pop) {
+        makePopButton(pop, popDim);
+    });
+}
+
+function makePopButton(popName, dim) {
+    var button = document.getElementById(popName + "Button");
+    button.style.cursor = "pointer";
+    console.log(button);
+    button.onclick = function() {
+        popFlags[popName] = !popFlags[popName];
+        filterPops(dim);
+    };
 }
 
 function initialize() {
