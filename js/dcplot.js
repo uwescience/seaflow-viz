@@ -99,27 +99,37 @@ function transformData(jsonp) {
 
 // Reduce functions to stop crossfilter from coercing null values to 0
 // Allows chart.defined() to work as expected and create disconintinous
-// line charts
+// line charts, while also differentiating between true 0 values and
+// missing data.
 function reduceAdd(key) {
     return function(p, v) {
-        if (p === null && v[key] === null) {
-            return null;
-        }
-        return p + v[key];
+        p.count++;
+        p.total += v[key];
+        return p;
     }
 }
 
 function reduceRemove(key) {
     return function(p, v) {
-        if (p === null && v[key] === null) {
-            return null;
-        }
-        return p - v[key];
+        p.count--;
+        p.total -= v[key];
+        return p;
     }
 }
 
 function reduceInitial() {
-    return null;
+    return { count: 0, total: 0 };
+}
+
+// Only return group elements with counts > 0
+function dummyGroup(sourceGroup) {
+    return {
+        all: function() {
+            return sourceGroup.all().filter(function(d) {
+                return d.value.count > 0;
+            });
+        }
+    }
 }
 
 // Recalculate y range for values in filterRange.  Must re-render/redraw to
@@ -138,10 +148,14 @@ function recalculateY(chart) {
         var key = function(element) { return element.key; };
     }
 
-    var valuesInRange = chart.group().all().filter(function(element, index, array) {
-        return (key(element) >= filter[0] && key(element) < filter[1]);
-    });
-    var minMaxY = d3.extent(valuesInRange, function(d) { return d.value; });
+    if (filter) {
+        var valuesInRange = chart.group().all().filter(function(element, index, array) {
+            return (key(element) >= filter[0] && key(element) < filter[1]);
+        });
+    } else {
+        var valuesInRange = chart.group().all();
+    }
+    var minMaxY = d3.extent(valuesInRange, function(d) { return d.value.total; });
     // Add 10% headroom above and below
     var diff = minMaxY[1] - minMaxY[0];
     minMaxY[0] = minMaxY[0] - (diff * .1);
@@ -149,37 +163,71 @@ function recalculateY(chart) {
     chart.y(d3.scale.linear().domain(minMaxY));
 }
 
-function filteredHandler(chart, filter) {
-    // Only draw dots if size of filter range is <= 12 hours
-    var maxDotRange = 1000 * 60 * 60 * 12 * 1;
-    var dotOptions = {
-        radius: 2,
-        fillOpacity: 0.8,
-        strokeOpacity: 0.8
-    };
-    if ((filter[1] - filter[0]) <= maxDotRange) {
-        if (chart.children !== undefined) {
-            chart.children().forEach(function(c) {
-                c.renderDataPoints(dotOptions);
-            });
-        } else {
-            chart.renderDataPoints(dotOptions);
-        }
-    } else {
-        if (chart.children !== undefined) {
-            chart.children().forEach(function(c) {
-                c.renderDataPoints(false);
-            });
-        } else {
-            chart.renderDataPoints(false);
-        }
-    }
+function preRedrawHandler(chart) {
+    var filter = chart.filter();
+    console.log("preRedraw fired");
 
-    // Recalculate Y domain, but don't redraw or render
+    // Add dots if time range is small
+    addDots(chart);
+
+    // Recalculate Y domain
     recalculateY(chart);
 
-    // Have to render, not redraw, to fix renderDataPoint changes
+    // Render
+    // This may seem strange to do right before redrawing, but is necessary
+    // to get dots drawn
     chart.render();
+}
+
+function filterByPop(popName, dim) {
+    if (popName !== null) {
+        dim.filter(popName);
+    } else {
+        dim.filterAll();
+    }
+    // Add dots if time range is small
+    addDots(charts["conc"]);
+    addDots(charts["size"]);
+
+    // Recalculate Y domain
+    recalculateY(charts["conc"]);
+    recalculateY(charts["size"]);
+
+    // Have to render and redraw to get dots drawn properly
+    charts["conc"].render();
+    charts["size"].render();
+    charts["conc"].redraw();
+    charts["size"].redraw();
+}
+
+function addDots(chart) {
+    var filter = chart.filter();
+    if (filter) {
+        var maxDotRange = 1000 * 60 * 60 * 12 * 1;  // 12 hours
+        var dotOptions = {
+            radius: 2,
+            fillOpacity: 0.8,
+            strokeOpacity: 0.8
+        };
+        if ((filter[1] - filter[0]) <= maxDotRange) {
+            console.log("Adding dots");
+            if (chart.children !== undefined) {
+                chart.children().forEach(function(c) {
+                    c.renderDataPoints(dotOptions);
+                });
+            } else {
+                chart.renderDataPoints(dotOptions);
+            }
+        } else {
+            if (chart.children !== undefined) {
+                chart.children().forEach(function(c) {
+                    c.renderDataPoints(false);
+                });
+            } else {
+                chart.renderDataPoints(false);
+            }
+        }
+    }
 }
 
 function plotLineChart(timeDim, key, yAxisLabel) {
@@ -189,9 +237,10 @@ function plotLineChart(timeDim, key, yAxisLabel) {
     var numberFormat = d3.format(".3n");
 
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var keyByTimeGroup = timeDim.group().reduce(
-        reduceAdd(key), reduceRemove(key), reduceInitial);
-    var minMaxY = d3.extent(keyByTimeGroup.all(), function(d) { return d.value; });
+    var keyGroup = dummyGroup(timeDim.group().reduce(
+        reduceAdd(key), reduceRemove(key), reduceInitial));
+
+    var minMaxY = d3.extent(keyGroup.all(), function(d) { return d.value.total; });
 
     chart
         .width(768)
@@ -202,12 +251,13 @@ function plotLineChart(timeDim, key, yAxisLabel) {
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .dimension(timeDim)
-        .group(keyByTimeGroup)
+        .group(keyGroup)
+        .valueAccessor(function(d) { return d.value.total; })
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
         .title(function(d) {
             return d.key + '\n' + d3.format(".3n")(d.value);
         })
-        .on("filtered", filteredHandler);
+        .on("preRedraw", preRedrawHandler);
     chart.render();
 }
 
@@ -215,12 +265,13 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
     var chart = dc.seriesChart("#" + key);
     charts[key] = chart;
 
-    /*keyGroup = timePopDim.group().reduce(
-        reduceAdd(key), reduceRemove(key), reduceInitial);*/
-    keyGroup = timePopDim.group().reduceSum(function(d) { return d[key]; });
+    var keyGroup = dummyGroup(timePopDim.group().reduce(
+        reduceAdd(key), reduceRemove(key), reduceInitial));
+
+    //var keyGroup = timePopDim.group().reduceSum(function(d) { return d[key]; });
 
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var minMaxY = d3.extent(keyGroup.all(), function(p) { return p.value; });
+    var minMaxY = d3.extent(keyGroup.all(), function(p) { return p.value.total; });
     chart
         .width(768)
         .height(150)
@@ -231,12 +282,12 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
         .group(keyGroup)
         .seriesAccessor(function(d) { return popLookup[d.key[1]]; })
         .keyAccessor(function(d) { return d.key[0]; })
-        .valueAccessor(function(p) { return p.value; })
+        .valueAccessor(function(p) { return p.value.total; })
         .brushOn(false)
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .title(function(d) {
-            return d.key[0] + '\n' + d.key[1] + "\n" + d3.format(".3n")(d.value);
+            return d.key[0] + '\n' + d.key[1] + "\n" + d3.format(".3n")(d.value.total);
         })
         .legend(dc.legend()
             .x(75)
@@ -252,7 +303,7 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
                 return (d.y !== null);
             }
         })
-        .on("filtered", filteredHandler);
+        .on("preRedraw", preRedrawHandler);
     chart.margins().bottom = 20
     chart.render();
 }
@@ -262,9 +313,9 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
     charts["rangeChart"] = rangeChart;
 
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var keyByTime = timeDim.group().reduce(
-            reduceAdd(key), reduceRemove(key), reduceInitial);
-    var minMaxY = d3.extent(keyByTime.all(), function(d) { return d.value; });
+    var keyGroup = dummyGroup(timeDim.group().reduce(
+            reduceAdd(key), reduceRemove(key), reduceInitial));
+    var minMaxY = d3.extent(keyGroup.all(), function(d) { return d.value.total; });
     rangeChart
         .width(768)
         .height(100)
@@ -273,7 +324,8 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .dimension(timeDim)
-        .group(keyByTime)
+        .group(keyGroup)
+        .valueAccessor(function(d) { return d.value.total; })
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     rangeChart.render();
     rangeChart.on("filtered", function(chart, filter) {
@@ -304,14 +356,20 @@ function plot(jsonp) {
 
     plotRangeChart(timeDim, "total_conc", "Total Abundance (10^6 cells/L)");
 
-    /*setTimeout(function() {
-        console.log(timePopDim.groupAll().reduceCount().value());
-        popDim.filter("prochloro");
-        console.log(timePopDim.groupAll().reduceCount().value());
-        dc.redrawAll();
-        console.log(charts["par"].filter());
-        console.log(charts["conc"].filter());
-    }, 5000);*/
+    setTimeout(function() {
+        //var first = charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; })[0];
+        //console.log(first.key[0], first.key[1], first.value.total, first.value.count);
+        //console.log("filtering for prochloro");
+        filterByPop("prochloro", popDim);
+        //console.log(charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; }));
+
+        setTimeout(function() {
+            console.log("Clearing filter");
+            filterByPop(null, popDim);
+            //console.log(charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; }));
+        }, 5000);
+
+    }, 5000);
 }
 
 function initialize() {
