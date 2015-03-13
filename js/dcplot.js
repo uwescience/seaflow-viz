@@ -372,20 +372,7 @@ function plot(jsonp) {
 
     plotRangeChart(timeDim, "total_conc", "Total Abundance (10^6 cells/L)");
 
-    /*setTimeout(function() {
-        //var first = charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; })[0];
-        //console.log(first.key[0], first.key[1], first.value.total, first.value.count);
-        //console.log("filtering for prochloro");
-        filterByPop("prochloro", popDim);
-        //console.log(charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; }));
-
-        setTimeout(function() {
-            console.log("Clearing filter");
-            filterByPop(null, popDim);
-            //console.log(charts["conc"].group().all().filter(function(d) { return d.key[1] === "beads"; }));
-        }, 5000);
-
-    }, 5000);*/
+    // Set up basic population buttons
     popNames.forEach(function(pop) {
         makePopButton(pop, popDim);
     });
