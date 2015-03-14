@@ -165,7 +165,10 @@ function recalculateY(chart) {
     } else {
         var valuesInRange = chart.group().all();
     }
-    var minMaxY = d3.extent(valuesInRange, function(d) { return d.value.total / d.value.count; });
+    var nonNull = valuesInRange.filter(function(d) { return d.value.total !== null; });
+    var minMaxY = d3.extent(nonNull, function(d) {
+        return d.value.total / d.value.count;
+    });
     // Add 10% headroom above and below
     var diff = minMaxY[1] - minMaxY[0];
     minMaxY[0] = minMaxY[0] - (diff * .1);
@@ -174,10 +177,8 @@ function recalculateY(chart) {
 }
 
 function preRedrawHandler(chart) {
-    var filter = chart.filter();
-
     // Add dots if time range is small
-    addDots(chart);
+    //addDots(chart);
 
     // Recalculate Y domain
     recalculateY(chart);
@@ -185,7 +186,7 @@ function preRedrawHandler(chart) {
     // Render
     // This may seem strange to do right before redrawing, but is necessary
     // to get dots drawn
-    chart.render();
+    //chart.render();
 }
 
 // popFlags should be 
@@ -198,16 +199,16 @@ function filterPops(dim) {
         });
     }
     // Add dots if time range is small
-    addDots(charts["conc"]);
-    addDots(charts["size"]);
+    //addDots(charts["conc"]);
+    //addDots(charts["size"]);
 
     // Recalculate Y domain
     recalculateY(charts["conc"]);
     recalculateY(charts["size"]);
 
     // Have to render and redraw to get dots and Y Axis scaling drawn properly
-    charts["conc"].render();
-    charts["size"].render();
+    //charts["conc"].render();
+    //charts["size"].render();
     charts["conc"].redraw();
     charts["size"].redraw();
 }
@@ -246,13 +247,13 @@ function plotLineChart(timeDim, key, yAxisLabel) {
     var chart = dc.lineChart("#" + key);
     charts[key] = chart;
 
-    var numberFormat = d3.format(".3n");
-
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var keyGroup = dummyGroup(timeDim.group().reduce(
+    var functs = getLineChartFunctions(minMaxTime[0], minMaxTime);
+
+    var keyGroup = dummyGroup(timeDim.group(functs.group).reduce(
         reduceAdd(key), reduceRemove(key), reduceInitial));
 
-    var minMaxY = d3.extent(keyGroup.all(), function(d) { return d.value.total; });
+    var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
 
     chart
         .width(768)
@@ -261,11 +262,16 @@ function plotLineChart(timeDim, key, yAxisLabel) {
         .y(d3.scale.linear().domain(minMaxY))
         .brushOn(false)
         .clipPadding(10)
+        .renderDataPoints({
+            radius: 2,
+            fillOpacity: 0.8,
+            strokeOpacity: 0.8
+        })
         .yAxisLabel(yAxisLabel)
         .interpolate("basis")
         .dimension(timeDim)
         .group(keyGroup)
-        .valueAccessor(function(d) { return d.value.total; })
+        .valueAccessor(functs.valueAccessor)
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
         .title(function(d) {
             return d.key + '\n' + d3.format(".3n")(d.value.total / d.value.count) + "\n" + d.value.total + "\n" + d.value.count;
@@ -284,8 +290,6 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
 
     var keyGroup = dummyGroup(timePopDim.group(functs.group).reduce(
         reduceAdd(key), reduceRemove(key), reduceInitial));
-
-    console.log(keyGroup.all());
 
     var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
 
@@ -320,7 +324,12 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
                 // don't plot segements with missing data
                 return (d.y !== null);
             },
-            interpolate: "basis"
+            interpolate: "basis",
+            renderDataPoints: {
+                radius: 2,
+                fillOpacity: 0.8,
+                strokeOpacity: 0.8
+            }
         })
         .on("preRedraw", preRedrawHandler);
     chart.margins().bottom = 20
@@ -337,8 +346,6 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
     var keyGroup = dummyGroup(timeDim.group(functs.group).reduce(
         reduceAdd(key), reduceRemove(key), reduceInitial));
 
-    console.log(keyGroup.all());
-
     var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
 
     rangeChart
@@ -352,7 +359,6 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         .dimension(timeDim)
         .group(keyGroup)
         .valueAccessor(functs.valueAccessor)
-        .keyAccessor(functs.keyAccessor)
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     rangeChart.render();
     rangeChart.on("filtered", function(chart, filter) {
@@ -372,11 +378,12 @@ function getBinSize(dateRange) {
     var msInRange = dateRange[1].getTime() - dateRange[0].getTime();
     var points = ceiling(msInRange / msIn3Min);
 
-    // Figure out how large to make each bin in order to keep points
+    // Figure out how large to make each bin (in ms) in order to keep points
     // below maxPoints. e.g. if there are 961 3 minute points in range,
     // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
     // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
-    return ceiling(points / maxPoints) * msIn3Min;
+    //return ceiling(points / maxPoints) * msIn3Min;  // in milliseconds
+    return msIn3Min;
 }
 
 function getSeriesChartFunctions(firstDate, dateRange) {
@@ -390,13 +397,16 @@ function getSeriesChartFunctions(firstDate, dateRange) {
 
     var functs = {
         valueAccessor: function(d) {
-            return d.value.total / d.value.count;
+            if (d.value.total === null) {
+                return null;
+            } else {
+                return d.value.total / d.value.count;
+            }
         }
     };
 
     var msIn3Min = 3 * 60 * 1000;
-    //if (binSize === msIn3Min) {
-    if (true) {
+    if (binSize === msIn3Min) {
         // No binning in larger time slices necessary
         // Use default grouping
         functs.group = function(d) { return d; };
@@ -404,19 +414,18 @@ function getSeriesChartFunctions(firstDate, dateRange) {
     } else {
         // Functions to bin in larger time slices
         functs.group = function(d) {
-            var diff = d[0].getTime() - start.getTime();
-            return [Math.floor(diff / binSize), d[1]];
+            var binOffset = Math.floor((d[0].getTime() - start.getTime()) / binSize);
+            var offset = binOffset * binSize;
+            return [new Date(start.getTime() + offset), d[1]];
         };
         functs.keyAccessor = function(d) {
-            return new Date(start.getTime() + (d.key[0] * binSize));
+            return d.key[0];
         };
     }
     return functs;
 }
 
 function getLineChartFunctions(firstDate, dateRange) {
-
-    
     var binSize = getBinSize(dateRange);
 
     // Reset to first hour UTC
@@ -427,7 +436,11 @@ function getLineChartFunctions(firstDate, dateRange) {
 
     var functs = {
         valueAccessor: function(d) {
-            return d.value.total / d.value.count;
+            if (d.value.total === null) {
+                return null;
+            } else {
+                return d.value.total / d.value.count;
+            }
         }
     };
 
@@ -436,15 +449,12 @@ function getLineChartFunctions(firstDate, dateRange) {
         // No binning in larger time slice s necessary
         // Use default grouping
         functs.group = function(d) { return d; };
-        functs.keyAccessor = function(d) { return d.key; };
     } else {
         // Functions to bin in larger time slices
         functs.group = function(d) {
-            var diff = d.getTime() - start.getTime();
-            return Math.floor(diff / binSize);
-        };
-        functs.keyAccessor = function(d) {
-            return new Date(start.getTime() + (d.key * binSize));
+            var binOffset = Math.floor((d.getTime() - start.getTime()) / binSize);
+            var offset = binOffset * binSize;
+            return new Date(start.getTime() + offset);
         };
     }
     return functs;
