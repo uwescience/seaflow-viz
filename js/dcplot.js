@@ -3,7 +3,7 @@ var charts = {};
 var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
 // Full names for legend
 var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
-var popLookup = {"prochloro": "Prochlorococcus", "synecho": "Synechococcus", "picoeuk": "Picoeukaryotes", "beads": "Beads"};
+
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
 
@@ -165,7 +165,7 @@ function recalculateY(chart) {
     } else {
         var valuesInRange = chart.group().all();
     }
-    var minMaxY = d3.extent(valuesInRange, function(d) { return d.value.total; });
+    var minMaxY = d3.extent(valuesInRange, function(d) { return d.value.total / d.value.count; });
     // Add 10% headroom above and below
     var diff = minMaxY[1] - minMaxY[0];
     minMaxY[0] = minMaxY[0] - (diff * .1);
@@ -268,23 +268,27 @@ function plotLineChart(timeDim, key, yAxisLabel) {
         .valueAccessor(function(d) { return d.value.total; })
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
         .title(function(d) {
-            return d.key + '\n' + d3.format(".3n")(d.value);
+            return d.key + '\n' + d3.format(".3n")(d.value.total / d.value.count) + "\n" + d.value.total + "\n" + d.value.count;
         })
         .on("preRedraw", preRedrawHandler);
     chart.render();
 }
 
 function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
+    var popLookup = {"prochloro": "Prochlorococcus", "synecho": "Synechococcus", "picoeuk": "Picoeukaryotes", "beads": "Beads"};
     var chart = dc.seriesChart("#" + key);
     charts[key] = chart;
 
-    var keyGroup = dummyGroup(timePopDim.group().reduce(
+    var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
+    var functs = getSeriesChartFunctions(minMaxTime[0], minMaxTime);
+
+    var keyGroup = dummyGroup(timePopDim.group(functs.group).reduce(
         reduceAdd(key), reduceRemove(key), reduceInitial));
 
-    //var keyGroup = timePopDim.group().reduceSum(function(d) { return d[key]; });
+    console.log(keyGroup.all());
 
-    var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var minMaxY = d3.extent(keyGroup.all(), function(p) { return p.value.total; });
+    var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
+
     chart
         .width(768)
         .height(150)
@@ -294,13 +298,13 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
         .dimension(timePopDim)
         .group(keyGroup)
         .seriesAccessor(function(d) { return popLookup[d.key[1]]; })
-        .keyAccessor(function(d) { return d.key[0]; })
-        .valueAccessor(function(p) { return p.value.total; })
+        .keyAccessor(functs.keyAccessor)
+        .valueAccessor(functs.valueAccessor)
         .brushOn(false)
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .title(function(d) {
-            return d.key[0] + '\n' + d.key[1] + "\n" + d3.format(".3n")(d.value.total);
+            return d.key[0] + '\n' + d.key[1] + "\n" + d3.format(".3n")(functs.valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
         })
         .legend(dc.legend()
             .x(75)
@@ -328,9 +332,15 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
     charts["rangeChart"] = rangeChart;
 
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var keyGroup = dummyGroup(timeDim.group().reduce(
-            reduceAdd(key), reduceRemove(key), reduceInitial));
-    var minMaxY = d3.extent(keyGroup.all(), function(d) { return d.value.total; });
+    var functs = getLineChartFunctions(minMaxTime[0], minMaxTime);
+
+    var keyGroup = dummyGroup(timeDim.group(functs.group).reduce(
+        reduceAdd(key), reduceRemove(key), reduceInitial));
+
+    console.log(keyGroup.all());
+
+    var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
+
     rangeChart
         .width(768)
         .height(100)
@@ -341,7 +351,8 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         .yAxisLabel(yAxisLabel)
         .dimension(timeDim)
         .group(keyGroup)
-        .valueAccessor(function(d) { return d.value.total; })
+        .valueAccessor(functs.valueAccessor)
+        .keyAccessor(functs.keyAccessor)
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     rangeChart.render();
     rangeChart.on("filtered", function(chart, filter) {
@@ -351,6 +362,96 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         charts["conc"].focus(filter);
         charts["size"].focus(filter);
     });
+}
+
+function getBinSize(dateRange) {
+    var maxPoints = 480;
+
+    // Find number of points for 3 minute buckets in timeRange
+    var msIn3Min = 3 * 60 * 1000;
+    var msInRange = dateRange[1].getTime() - dateRange[0].getTime();
+    var points = ceiling(msInRange / msIn3Min);
+
+    // Figure out how large to make each bin in order to keep points
+    // below maxPoints. e.g. if there are 961 3 minute points in range,
+    // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
+    // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
+    return ceiling(points / maxPoints) * msIn3Min;
+}
+
+function getSeriesChartFunctions(firstDate, dateRange) {
+    var binSize = getBinSize(dateRange);
+
+    // Reset to first hour UTC
+    var start = new Date(firstDate.getTime());
+    start.setUTCMinutes(0);
+    start.setUTCSeconds(0);
+    start.setUTCMilliseconds(0);
+
+    var functs = {
+        valueAccessor: function(d) {
+            return d.value.total / d.value.count;
+        }
+    };
+
+    var msIn3Min = 3 * 60 * 1000;
+    //if (binSize === msIn3Min) {
+    if (true) {
+        // No binning in larger time slices necessary
+        // Use default grouping
+        functs.group = function(d) { return d; };
+        functs.keyAccessor = function(d) { return d.key[0]; };
+    } else {
+        // Functions to bin in larger time slices
+        functs.group = function(d) {
+            var diff = d[0].getTime() - start.getTime();
+            return [Math.floor(diff / binSize), d[1]];
+        };
+        functs.keyAccessor = function(d) {
+            return new Date(start.getTime() + (d.key[0] * binSize));
+        };
+    }
+    return functs;
+}
+
+function getLineChartFunctions(firstDate, dateRange) {
+
+    
+    var binSize = getBinSize(dateRange);
+
+    // Reset to first hour UTC
+    var start = new Date(firstDate.getTime());
+    start.setUTCMinutes(0);
+    start.setUTCSeconds(0);
+    start.setUTCMilliseconds(0);
+
+    var functs = {
+        valueAccessor: function(d) {
+            return d.value.total / d.value.count;
+        }
+    };
+
+    var msIn3Min = 3 * 60 * 1000;
+    if (binSize === msIn3Min) {
+        // No binning in larger time slice s necessary
+        // Use default grouping
+        functs.group = function(d) { return d; };
+        functs.keyAccessor = function(d) { return d.key; };
+    } else {
+        // Functions to bin in larger time slices
+        functs.group = function(d) {
+            var diff = d.getTime() - start.getTime();
+            return Math.floor(diff / binSize);
+        };
+        functs.keyAccessor = function(d) {
+            return new Date(start.getTime() + (d.key * binSize));
+        };
+    }
+    return functs;
+}
+
+function ceiling(input) {
+    return Math.floor(input + .9999999);
 }
 
 function plot(jsonp) {
@@ -381,7 +482,6 @@ function plot(jsonp) {
 function makePopButton(popName, dim) {
     var button = document.getElementById(popName + "Button");
     button.style.cursor = "pointer";
-    console.log(button);
     button.onclick = function() {
         popFlags[popName] = !popFlags[popName];
         filterPops(dim);
