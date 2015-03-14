@@ -136,17 +136,6 @@ function reduceInitial() {
     return { count: 0, total: null };
 }
 
-// Only return group elements with counts > 0
-function dummyGroup(sourceGroup) {
-    return {
-        all: function() {
-            return sourceGroup.all().filter(function(d) {
-                return d.value.count > 0;
-            });
-        }
-    }
-}
-
 // Recalculate y range for values in filterRange.  Must re-render/redraw to
 // update plot.
 // TODO: consider doing this with additional dimensions.  Might be faster than
@@ -216,36 +205,6 @@ function filterPops(dim) {
     //charts["size"].render();
     charts["conc"].redraw();
     charts["size"].redraw();
-}
-
-// Add dots to line graphs if time range is small
-function addDots(chart) {
-    var filter = chart.filter();
-    if (filter) {
-        var maxDotRange = 1000 * 60 * 60 * 12 * 1;  // 12 hours
-        var dotOptions = {
-            radius: 2,
-            fillOpacity: 0.8,
-            strokeOpacity: 0.8
-        };
-        if ((filter[1] - filter[0]) <= maxDotRange) {
-            if (chart.children !== undefined) {
-                chart.children().forEach(function(c) {
-                    c.renderDataPoints(dotOptions);
-                });
-            } else {
-                chart.renderDataPoints(dotOptions);
-            }
-        } else {
-            if (chart.children !== undefined) {
-                chart.children().forEach(function(c) {
-                    c.renderDataPoints(false);
-                });
-            } else {
-                chart.renderDataPoints(false);
-            }
-        }
-    }
 }
 
 function plotLineChart(timeDim, key, yAxisLabel) {
