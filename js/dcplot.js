@@ -50,7 +50,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data) {
+    for (var i in jsonp.data.slice(1,25)) {
         var curTime = new Date(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -63,6 +63,7 @@ function transformData(jsonp) {
                 salinity: null,
                 ocean_tmp: null,
                 par: null,
+                par2: null,
                 total_conc: null
             });
             popNames.forEach(function(pn) {
@@ -80,6 +81,7 @@ function transformData(jsonp) {
             ocean_tmp: jsonp.data[i][idx["ocean_tmp"]],
             salinity: jsonp.data[i][idx["salinity"]],
             par: jsonp.data[i][idx["par"]],
+            par2: jsonp.data[i][idx["par"]],
             total_conc: jsonp.data[i][idx["total_conc"]]
         });
 
@@ -104,7 +106,9 @@ function transformData(jsonp) {
 // missing data.
 function reduceAdd(key) {
     return function(p, v) {
-        p.count++;
+        if (v[key] !== null) {
+            ++p.count;
+        }
         // want to avoid coercing a null p.total to 0 by adding a null
         // v[key]
         if (p.total !== null || v[key] !== null) {
@@ -116,8 +120,9 @@ function reduceAdd(key) {
 
 function reduceRemove(key) {
     return function(p, v) {
-        p.count--;
-
+        if (v[key] !== null) {
+            --p.count;
+        }
         // want to avoid coercing a null p.total to 0 by subtracting
         // a null v[key]
         if (p.total !== null || v[key] !== null) {
@@ -151,16 +156,16 @@ function recalculateY(chart) {
     if (chart.children !== undefined) {
         // Population series plot
         // key for dimension is [time, pop]
-        var key = function(element) { return element.key[0]; };
+        var timeKey = function(element) { return element.key[0]; };
     } else {
         // Single line chart
         // key for dimension is time
-        var key = function(element) { return element.key; };
+        var timeKey = function(element) { return element.key; };
     }
 
     if (filter) {
         var valuesInRange = chart.group().all().filter(function(element, index, array) {
-            return (key(element) >= filter[0] && key(element) < filter[1]);
+            return (timeKey(element) >= filter[0] && timeKey(element) < filter[1]);
         });
     } else {
         var valuesInRange = chart.group().all();
@@ -250,8 +255,8 @@ function plotLineChart(timeDim, key, yAxisLabel) {
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
     var functs = getLineChartFunctions(minMaxTime[0], minMaxTime);
 
-    var keyGroup = dummyGroup(timeDim.group(functs.group).reduce(
-        reduceAdd(key), reduceRemove(key), reduceInitial));
+    var keyGroup = timeDim.group(functs.group).reduce(
+        reduceAdd(key), reduceRemove(key), reduceInitial);
 
     var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
 
@@ -268,7 +273,7 @@ function plotLineChart(timeDim, key, yAxisLabel) {
             strokeOpacity: 0.8
         })
         .yAxisLabel(yAxisLabel)
-        .interpolate("basis")
+        .interpolate("cardinal")
         .dimension(timeDim)
         .group(keyGroup)
         .valueAccessor(functs.valueAccessor)
@@ -288,8 +293,8 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
     var functs = getSeriesChartFunctions(minMaxTime[0], minMaxTime);
 
-    var keyGroup = dummyGroup(timePopDim.group(functs.group).reduce(
-        reduceAdd(key), reduceRemove(key), reduceInitial));
+    var keyGroup = timePopDim.group(functs.group).reduce(
+        reduceAdd(key), reduceRemove(key), reduceInitial);
 
     var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
 
@@ -324,7 +329,7 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
                 // don't plot segements with missing data
                 return (d.y !== null);
             },
-            interpolate: "basis",
+            interpolate: "cardinal",
             renderDataPoints: {
                 radius: 2,
                 fillOpacity: 0.8,
@@ -342,10 +347,8 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
 
     var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
     var functs = getLineChartFunctions(minMaxTime[0], minMaxTime);
-
     var keyGroup = dummyGroup(timeDim.group(functs.group).reduce(
         reduceAdd(key), reduceRemove(key), reduceInitial));
-
     var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
 
     rangeChart
@@ -353,7 +356,7 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         .height(100)
         .x(d3.time.scale.utc().domain(minMaxTime))
         .y(d3.scale.linear().domain(minMaxY))
-        .interpolate("basis")
+        .interpolate("cardinal")
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .dimension(timeDim)
@@ -362,11 +365,11 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     rangeChart.render();
     rangeChart.on("filtered", function(chart, filter) {
-        charts["ocean_tmp"].focus(filter);
-        charts["salinity"].focus(filter);
+        //charts["ocean_tmp"].focus(filter);
+        //charts["salinity"].focus(filter);
         charts["par"].focus(filter);
-        charts["conc"].focus(filter);
-        charts["size"].focus(filter);
+        //charts["conc"].focus(filter);
+        //charts["size"].focus(filter);
     });
 }
 
@@ -383,60 +386,19 @@ function getBinSize(dateRange) {
     // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
     // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
     //return ceiling(points / maxPoints) * msIn3Min;  // in milliseconds
-    return msIn3Min;
-}
-
-function getSeriesChartFunctions(firstDate, dateRange) {
-    var binSize = getBinSize(dateRange);
-
-    // Reset to first hour UTC
-    var start = new Date(firstDate.getTime());
-    start.setUTCMinutes(0);
-    start.setUTCSeconds(0);
-    start.setUTCMilliseconds(0);
-
-    var functs = {
-        valueAccessor: function(d) {
-            if (d.value.total === null) {
-                return null;
-            } else {
-                return d.value.total / d.value.count;
-            }
-        }
-    };
-
-    var msIn3Min = 3 * 60 * 1000;
-    if (binSize === msIn3Min) {
-        // No binning in larger time slices necessary
-        // Use default grouping
-        functs.group = function(d) { return d; };
-        functs.keyAccessor = function(d) { return d.key[0]; };
-    } else {
-        // Functions to bin in larger time slices
-        functs.group = function(d) {
-            var binOffset = Math.floor((d[0].getTime() - start.getTime()) / binSize);
-            var offset = binOffset * binSize;
-            return [new Date(start.getTime() + offset), d[1]];
-        };
-        functs.keyAccessor = function(d) {
-            return d.key[0];
-        };
-    }
-    return functs;
+    return 4 * msIn3Min;
 }
 
 function getLineChartFunctions(firstDate, dateRange) {
+    var msIn3Min = 3 * 60 * 1000;
     var binSize = getBinSize(dateRange);
+    //console.log("lineChart binSize = " + (binSize/msIn3Min));
 
-    // Reset to first hour UTC
     var start = new Date(firstDate.getTime());
-    start.setUTCMinutes(0);
-    start.setUTCSeconds(0);
-    start.setUTCMilliseconds(0);
 
     var functs = {
         valueAccessor: function(d) {
-            if (d.value.total === null) {
+            if (d.value.total === null || d.value.count === 0) {
                 return null;
             } else {
                 return d.value.total / d.value.count;
@@ -444,9 +406,8 @@ function getLineChartFunctions(firstDate, dateRange) {
         }
     };
 
-    var msIn3Min = 3 * 60 * 1000;
     if (binSize === msIn3Min) {
-        // No binning in larger time slice s necessary
+        // No binning in larger time slices necessary
         // Use default grouping
         functs.group = function(d) { return d; };
     } else {
@@ -454,7 +415,45 @@ function getLineChartFunctions(firstDate, dateRange) {
         functs.group = function(d) {
             var binOffset = Math.floor((d.getTime() - start.getTime()) / binSize);
             var offset = binOffset * binSize;
-            return new Date(start.getTime() + offset);
+            var groupValue = new Date(start.getTime() + offset);
+            return groupValue;
+        };
+    }
+    return functs;
+}
+
+function getSeriesChartFunctions(firstDate, dateRange) {
+    var msIn3Min = 3 * 60 * 1000;
+    var binSize = getBinSize(dateRange);
+    //console.log("seriesChart binSize = " + (binSize/msIn3Min));
+
+    // Reset to first hour UTC
+    var start = new Date(firstDate.getTime());
+
+    var functs = {
+        valueAccessor: function(d) {
+            if (d.value.total === null || d.value.count === 0) {
+                return null;
+            } else {
+                return d.value.total / d.value.count;
+            }
+        },
+        keyAccessor: function(d) {
+            return d.key[0];
+        }
+    };
+
+    if (binSize === msIn3Min) {
+        // No binning in larger time slices necessary
+        // Use default grouping
+        functs.group = function(d) { return d; };
+    } else {
+        // Functions to bin in larger time slices
+        functs.group = function(d) {
+            var binOffset = Math.floor((d[0].getTime() - start.getTime()) / binSize);
+            var offset = binOffset * binSize;
+            var groupValue = [new Date(start.getTime() + offset), d[1]];
+            return groupValue;
         };
     }
     return functs;
@@ -474,14 +473,15 @@ function plot(jsonp) {
     var timePopDim = popxf.dimension(function(d) { return [d.time, d.pop]; });
     var popDim = popxf.dimension(function(d) { return d.pop; });
 
-    plotLineChart(timeDim, "ocean_tmp", "Temp (degC)");
-    plotLineChart(timeDim, "salinity", "Salinity (psu)");
+    //plotLineChart(timeDim, "ocean_tmp", "Temp (degC)");
+    //plotLineChart(timeDim, "salinity", "Salinity (psu)");
     plotLineChart(timeDim, "par", "PAR (w/m2)");
+    //plotLineChart2(timeDim, "par2", "PAR (w/m2)");
 
     plotSeriesChart(timeDim, timePopDim, "conc", "Abundance (10^6 cells/L)");
     plotSeriesChart(timeDim, timePopDim, "size", "Forward scatter (a.u.)");
 
-    plotRangeChart(timeDim, "total_conc", "Total Abundance (10^6 cells/L)");
+    //plotRangeChart(timeDim, "total_conc", "Total Abundance (10^6 cells/L)");
 
     // Set up basic population buttons
     popNames.forEach(function(pop) {
