@@ -343,30 +343,33 @@ function plotRangeChart(key, yAxisLabel) {
         }
 
         ["ocean_tmp", "salinity", "par"].forEach(function(key) {
-            console.log("switching dim/group for " + key);
-            timeDims[binSize].filterAll();
-            charts[key].dimension(timeDims[binSize]);
-            charts[key].group(groups[key][binSize]);
-            charts[key].x().domain([filter[0], filter[1]]);
-            recalculateY(charts[key], filter);
-            charts[key].redraw();
+            if (charts[key] !== undefined) {
+                console.log("switching dim/group for " + key);
+                charts[key].dimension(timeDims[binSize]);
+                charts[key].group(groups[key][binSize]);
+                charts[key].x().domain([filter[0], filter[1]]);
+                recalculateY(charts[key], filter);
+                charts[key].redraw();
+            }
         });
 
-        /*["conc", "size"].forEach(function(key) {
-            if (charts[key].dim !== timePopDims[binSize]) {
+        ["conc", "size"].forEach(function(key) {
+            if (charts[key] !== undefined) {
+                console.log("switching dim/group for " + key);
                 charts[key].dimension(timePopDims[binSize]);
                 charts[key].group(groups[key][binSize]);
+                charts[key].x().domain([filter[0], filter[1]]);
+                recalculateY(charts[key], filter);
+                charts[key].redraw();
             }
-            charts[key].focus(filter);
-        });*/
+        });
     });
 }
 
 function clearFilters() {
-    ["ocean_tmp", "salinity", "par"].forEach(function(key) {
-        [1,2,3,4].forEach(function(binSize) {
-            timeDims[binSize].filterAll();
-        });
+    [1,2,3,4].forEach(function(binSize) {
+        timeDims[binSize].filterAll();
+        timePopDims[binSize].filterAll();
     });
 }
 
@@ -453,8 +456,8 @@ function plot(jsonp) {
     plotLineChart("salinity", "Salinity (psu)");
     plotLineChart("par", "PAR (w/m2)");
 
-    //plotSeriesChart("conc", "Abundance (10^6 cells/L)");
-    //plotSeriesChart("size", "Forward scatter (a.u.)");
+    plotSeriesChart("conc", "Abundance (10^6 cells/L)");
+    plotSeriesChart("size", "Forward scatter (a.u.)");
 
     plotRangeChart("total_conc", "Total Abundance (10^6 cells/L)");
 
