@@ -5,7 +5,6 @@ var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
 var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
 var groups = {};
 var timeDims = {};
-var rangeDims = {};
 var timePopDims = {};
 var popDim;
 var timeFilter = null;
@@ -69,7 +68,6 @@ function transformData(jsonp) {
                 salinity: null,
                 ocean_tmp: null,
                 par: null,
-                par2: null,
                 total_conc: null
             });
             popNames.forEach(function(pn) {
@@ -87,10 +85,8 @@ function transformData(jsonp) {
             ocean_tmp: jsonp.data[i][idx["ocean_tmp"]],
             salinity: jsonp.data[i][idx["salinity"]],
             par: jsonp.data[i][idx["par"]],
-            par2: jsonp.data[i][idx["par"]],
             total_conc: jsonp.data[i][idx["total_conc"]]
         });
-
         popNames.forEach(function(pop) {
             popValues.push({
                 time: curTime,
@@ -197,7 +193,7 @@ function filterPops() {
     recalculateY(charts["conc"]);
     recalculateY(charts["size"]);
 
-    // Have to render and redraw to get dots and Y Axis scaling drawn properly
+    // Have to render and redraw to get Y Axis scaling drawn properly
     //charts["conc"].render();
     //charts["size"].render();
     charts["conc"].render();
@@ -325,40 +321,44 @@ function plotRangeChart(key, yAxisLabel) {
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     rangeChart.render();
     rangeChart.on("filtered", function(chart, filter) {
-        var binSize = getBinSize(filter);
-        console.log(binSize);
-        clearFilters();
-        timeFilter = filter;
-        if (filter === null) {
-            console.log("Reset filter");
-            filter = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
-        }
-
-        ["ocean_tmp", "salinity", "par"].forEach(function(key) {
-            if (charts[key] !== undefined) {
-                //console.log("switching dim/group for " + key);
-                charts[key].dimension(timeDims[binSize]);
-                charts[key].group(groups[key][binSize]);
-                charts[key].x().domain([filter[0], filter[1]]);
-                recalculateY(charts[key]);
-                charts[key].render();
+        dc.events.trigger(function() {
+            var t0 = new Date();
+            var binSize = getBinSize(filter);
+            console.log(binSize);
+            clearFilters();
+            timeFilter = filter;
+            if (filter === null) {
+                filter = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
             }
-        });
 
-        ["conc", "size"].forEach(function(key) {
-            if (charts[key] !== undefined) {
-                //console.log("switching dim/group for " + key);
-                charts[key].dimension(timePopDims[binSize]);
-                charts[key].group(groups[key][binSize]);
-                charts[key].x().domain([filter[0], filter[1]]);
-                recalculateY(charts[key]);
+            ["ocean_tmp", "salinity", "par"].forEach(function(key) {
+                if (charts[key] !== undefined) {
+                    //console.log("switching dim/group for " + key);
+                    charts[key].dimension(timeDims[binSize]);
+                    charts[key].group(groups[key][binSize]);
+                    charts[key].x().domain([filter[0], filter[1]]);
+                    recalculateY(charts[key]);
+                    charts[key].render();
+                }
+            });
 
-                // no need if filterPops is run right after. It will render
-                // too.
-                //charts[key].render();
-            }
-        });
-        filterPops();
+            ["conc", "size"].forEach(function(key) {
+                if (charts[key] !== undefined) {
+                    //console.log("switching dim/group for " + key);
+                    charts[key].dimension(timePopDims[binSize]);
+                    charts[key].group(groups[key][binSize]);
+                    charts[key].x().domain([filter[0], filter[1]]);
+                    recalculateY(charts[key]);
+
+                    // no need if filterPops is run right after. It will render
+                    // too.
+                    //charts[key].render();
+                }
+            });
+            filterPops();
+            var t1 = new Date();
+            console.log("filtered took " + (t1.getTime() - t0.getTime()) / 1000);
+        }, 800);
     });
 }
 
@@ -425,7 +425,7 @@ function plot(jsonp) {
     timeDims[3] = sflxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
     timeDims[4] = sflxf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
 
-    ["ocean_tmp", "salinity", "par", "total_conc"].forEach(function(key) {
+    ["ocean_tmp", "salinity", "par","total_conc"].forEach(function(key) {
         groups[key] = {};
         [1,2,3,4].forEach(function(binSize) {
             groups[key][binSize] = timeDims[binSize].group().reduce(
