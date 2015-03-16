@@ -5,6 +5,7 @@ var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
 var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
 var groups = {};
 var timeDims = {};
+var rangeDims = {};
 var timePopDims = {};
 var popDim;
 var timeFilter = null;
@@ -50,8 +51,9 @@ function transformData(jsonp) {
         idx[jsonp.header[col]] = col;
     }
 
-    var sflValues = [];  // environmental data
-    var popValues = [];  // population data
+    var sflValues = [];    // environmental data
+    var rangeValues = [];  // time selector
+    var popValues = [];    // population data
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
@@ -67,7 +69,10 @@ function transformData(jsonp) {
                 time: new Date(prevTime.getTime() + (3 * msecMinute)),
                 salinity: null,
                 ocean_tmp: null,
-                par: null,
+                par: null
+            });
+            rangeValues.push({
+                time: new Date(prevTime.getTime() + (3 * msecMinute)),
                 total_conc: null
             });
             popNames.forEach(function(pn) {
@@ -84,7 +89,10 @@ function transformData(jsonp) {
             time: curTime,
             ocean_tmp: jsonp.data[i][idx["ocean_tmp"]],
             salinity: jsonp.data[i][idx["salinity"]],
-            par: jsonp.data[i][idx["par"]],
+            par: jsonp.data[i][idx["par"]]
+        });
+        rangeValues.push({
+            time: curTime,
             total_conc: jsonp.data[i][idx["total_conc"]]
         });
         popNames.forEach(function(pop) {
@@ -99,7 +107,7 @@ function transformData(jsonp) {
         prevTime = curTime;
     }
 
-    return { sfl: sflValues, pop: popValues };
+    return { sfl: sflValues, range: rangeValues, pop: popValues };
 }
 
 // Reduce functions to stop crossfilter from coercing null values to 0
@@ -301,9 +309,9 @@ function plotRangeChart(key, yAxisLabel) {
     var rangeChart = dc.lineChart("#rangeChart");
     charts["rangeChart"] = rangeChart;
 
-    var minMaxTime = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    var minMaxTime = [rangeDims[1].bottom(1)[0].time, rangeDims[1].top(1)[0].time];
     var binSize = getBinSize(minMaxTime);
-    var dim = timeDims[binSize];
+    var dim = rangeDims[binSize];
     var group = groups[key][binSize];
     var minMaxY = d3.extent(group.all(), valueAccessor);
 
@@ -364,7 +372,7 @@ function plotRangeChart(key, yAxisLabel) {
 
 function clearFilters() {
     [1,2,3,4].forEach(function(binSize) {
-        timeDims[binSize].filterAll();
+        //timeDims[binSize].filterAll();
         timePopDims[binSize].filterAll();
     });
     popDim.filterAll();
@@ -415,7 +423,10 @@ function plot(jsonp) {
 
     var t1 = new Date().getTime();
 
+    // Make separate crossfilters for sfl data and range plot to prevent them
+    // from filtering each other.
     var sflxf = crossfilter(data["sfl"]),
+        rangexf = crossfilter(data["range"]),
         popxf = crossfilter(data["pop"]);
 
     var msIn3Min = 3 * 60 * 1000;
@@ -425,10 +436,23 @@ function plot(jsonp) {
     timeDims[3] = sflxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
     timeDims[4] = sflxf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
 
-    ["ocean_tmp", "salinity", "par","total_conc"].forEach(function(key) {
+    ["ocean_tmp", "salinity", "par"].forEach(function(key) {
         groups[key] = {};
         [1,2,3,4].forEach(function(binSize) {
             groups[key][binSize] = timeDims[binSize].group().reduce(
+                reduceAdd(key), reduceRemove(key), reduceInitial);
+        });
+    });
+
+    rangeDims[1] = rangexf.dimension(function(d) { return d.time; });
+    rangeDims[2] = rangexf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
+    rangeDims[3] = rangexf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
+    rangeDims[4] = rangexf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
+
+    ["total_conc"].forEach(function(key) {
+        groups[key] = {};
+        [1,2,3,4].forEach(function(binSize) {
+            groups[key][binSize] = rangeDims[binSize].group().reduce(
                 reduceAdd(key), reduceRemove(key), reduceInitial);
         });
     });
