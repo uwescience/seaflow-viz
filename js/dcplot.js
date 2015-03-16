@@ -176,11 +176,12 @@ function recalculateY(chart) {
     var minMaxY = d3.extent(nonNull, function(d) {
         return valueAccessor(d);
     });
-    // Add 10% headroom above and below max value
-    var minY = minMaxY[0] - (minMaxY[1] * .1);
-    var maxY = minMaxY[1] + (minMaxY[1] * .1);
-    console.log(chart.yAxisLabel(), minMaxY, [minY, maxY], timeFilter, diff);
-    chart.y(d3.scale.linear().domain([minY, maxY]));
+    // Make sure there is some distance within Y axis if all values are the same
+    if (minMaxY[1] - minMaxY[0] === 0) {
+        minMaxY[0] -= .1;
+        minMaxY[1] += .1;
+    }
+    chart.y(d3.scale.linear().domain(minMaxY));
 }
 
 // popFlags should be 
