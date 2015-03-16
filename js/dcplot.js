@@ -169,11 +169,14 @@ function recalculateY(chart) {
     } else {
         var valuesInRange = chart.group().all();
     }
-    var hasData = valuesInRange.filter(function(d) {
-        return d.value.total !== null && d.value.count !== 0;
+
+    // If data has been filtered, some group elements may have no data, which would
+    // cause minMaxY to always anchor at 0. Filter out those values here.
+    var nonNull = valuesInRange.filter(function(d) {
+        return valueAccessor(d) !== null;
     });
-    var minMaxY = d3.extent(hasData, function(d) {
-        return d.value.total / d.value.count;
+    var minMaxY = d3.extent(nonNull, function(d) {
+        return valueAccessor(d);
     });
     // Add 10% headroom above and below
     var diff = minMaxY[1] - minMaxY[0];
