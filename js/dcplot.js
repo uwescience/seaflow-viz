@@ -253,12 +253,14 @@ function plotSeriesChart(key, yAxisLabel) {
     var group = groups[key][binSize];
     var minMaxY = d3.extent(group.all(), valueAccessor);
 
+    // This function take a significant amount of time (see browser profiling)
+    // TODO: consider setting up population charts so that custom keyAccessor
+    // is unnecessary.
     var keyAccessor = function(d) {
-        var parts = d.key.split("_");
-        return new Date(+parts[0]);
+        return new Date(+(d.key.substr(0, d.key.indexOf("_"))));
     };
     var seriesAccessor = function(d) {
-        return popLookup[d.key.split("_")[1]];
+        return popLookup[d.key.substr(d.key.indexOf("_")+1)];
     };
 
     var minMaxY = d3.extent(group.all(), valueAccessor);
