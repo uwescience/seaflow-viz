@@ -9,11 +9,13 @@ var rangeDims = {};
 var timePopDims = {};
 var popDim;
 var timeFilter = null;
+var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S UTC");
 
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
 
 function executeSqlQuery(query, cb) {
+    var t0 = new Date();
     var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
     $.ajax({
         url : sqlshare_query_url + encodeURIComponent(query),
@@ -25,7 +27,7 @@ function executeSqlQuery(query, cb) {
             alert("error errorThrow:" + et);
         },
         success : function(jsonp) {
-            //console.log(jsonp);
+            //console.log("SQL query took " + (((new Date().getTime()) - t0.getTime())/1000) + " sec")
             cb(jsonp);
         }
     });
@@ -45,6 +47,9 @@ function transformData(jsonp) {
         return;
     }
 
+    // Parse format returned from SQLShare as UTC
+    var timeFormat = d3.time.format.utc("%m/%d/%Y %H:%M:%S %p");
+
     // Figure out which columns correspond to which column headers
     idx = {};
     for (var col = 0; col < jsonp.header.length; col++) {
@@ -58,7 +63,7 @@ function transformData(jsonp) {
     var msecMinute = 60 * 1000;
     var prevTime = null;
     for (var i in jsonp.data) {
-        var curTime = new Date(jsonp.data[i][idx["time"]]);
+        var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
         // records are missing and add a placeholder empty record. Only need 
@@ -73,7 +78,7 @@ function transformData(jsonp) {
             });
             rangeValues.push({
                 time: new Date(prevTime.getTime() + (3 * msecMinute)),
-                total_conc: null
+                par: null
             });
             popNames.forEach(function(pn) {
                 popValues.push({
@@ -93,7 +98,7 @@ function transformData(jsonp) {
         });
         rangeValues.push({
             time: curTime,
-            total_conc: jsonp.data[i][idx["total_conc"]]
+            par: jsonp.data[i][idx["par"]]
         });
         popNames.forEach(function(pop) {
             popValues.push({
@@ -125,7 +130,6 @@ function reduceAdd(key) {
         if (p.total !== null || v[key] !== null) {
             p.total += v[key];
         }
-        //console.log(p.count, p.total);
         return p;
     }
 }
@@ -202,8 +206,6 @@ function filterPops() {
     recalculateY(charts["size"]);
 
     // Have to render and redraw to get Y Axis scaling drawn properly
-    //charts["conc"].render();
-    //charts["size"].render();
     charts["conc"].render();
     charts["size"].render();
 }
@@ -237,8 +239,11 @@ function plotLineChart(key, yAxisLabel) {
         .valueAccessor(valueAccessor)
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
         .title(function(d) {
-            return d.key + '\n' + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
+            return labelFormat(d.key) + '\n' + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
         });
+    chart.margins().bottom = 20;
+    chart.margins().left = 60;
+    chart.yAxis().ticks(6);
     chart.render();
 }
 
@@ -256,11 +261,15 @@ function plotSeriesChart(key, yAxisLabel) {
     // This function take a significant amount of time (see browser profiling)
     // TODO: consider setting up population charts so that custom keyAccessor
     // is unnecessary.
+    // As small performance improvement, hardcode substring positions since
+    // we know the key is always something like "1426522573342_key" and the
+    // length of the milliseconds string from Date.getTime() won't change until
+    // 2286
     var keyAccessor = function(d) {
-        return new Date(+(d.key.substr(0, d.key.indexOf("_"))));
+        return new Date(+(d.key.substr(0, 13)));
     };
     var seriesAccessor = function(d) {
-        return popLookup[d.key.substr(d.key.indexOf("_")+1)];
+        return popLookup[d.key.substr(14)];
     };
 
     var minMaxY = d3.extent(group.all(), valueAccessor);
@@ -280,7 +289,7 @@ function plotSeriesChart(key, yAxisLabel) {
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .title(function(d) {
-            return d.key + "\n" + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
+            return labelFormat(keyAccessor(d)) + "\n" + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
         })
         .legend(dc.legend()
             .x(75)
@@ -303,12 +312,14 @@ function plotSeriesChart(key, yAxisLabel) {
                 strokeOpacity: 0.8
             }
         });
-    chart.margins().bottom = 20
+    chart.margins().bottom = 20;
+    chart.margins().left = 60;
+    chart.yAxis().ticks(6);
     chart.render();
 }
 
 function plotRangeChart(key, yAxisLabel) {
-    var rangeChart = dc.lineChart("#rangeChart");
+    var chart = dc.lineChart("#rangeChart");
     charts["rangeChart"] = rangeChart;
 
     var minMaxTime = [rangeDims[1].bottom(1)[0].time, rangeDims[1].top(1)[0].time];
@@ -317,7 +328,7 @@ function plotRangeChart(key, yAxisLabel) {
     var group = groups[key][binSize];
     var minMaxY = d3.extent(group.all(), valueAccessor);
 
-    rangeChart
+    chart
         .width(768)
         .height(100)
         .x(d3.time.scale.utc().domain(minMaxTime))
@@ -329,12 +340,11 @@ function plotRangeChart(key, yAxisLabel) {
         .group(group)
         .valueAccessor(valueAccessor)
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
-    rangeChart.render();
-    rangeChart.on("filtered", function(chart, filter) {
+    chart.on("filtered", function(chart, filter) {
         dc.events.trigger(function() {
             var t0 = new Date();
             var binSize = getBinSize(filter);
-            console.log(binSize);
+            //console.log(binSize);
             clearFilters();
             timeFilter = filter;
             if (filter === null) {
@@ -346,6 +356,7 @@ function plotRangeChart(key, yAxisLabel) {
                     //console.log("switching dim/group for " + key);
                     charts[key].dimension(timeDims[binSize]);
                     charts[key].group(groups[key][binSize]);
+                    charts[key].expireCache();
                     charts[key].x().domain([filter[0], filter[1]]);
                     recalculateY(charts[key]);
                     charts[key].render();
@@ -357,6 +368,7 @@ function plotRangeChart(key, yAxisLabel) {
                     //console.log("switching dim/group for " + key);
                     charts[key].dimension(timePopDims[binSize]);
                     charts[key].group(groups[key][binSize]);
+                    charts[key].expireCache();
                     charts[key].x().domain([filter[0], filter[1]]);
                     recalculateY(charts[key]);
 
@@ -367,9 +379,13 @@ function plotRangeChart(key, yAxisLabel) {
             });
             filterPops();
             var t1 = new Date();
-            console.log("filtered took " + (t1.getTime() - t0.getTime()) / 1000);
-        }, 800);
+            //console.log("filtered took " + (t1.getTime() - t0.getTime()) / 1000);
+        }, 400);
     });
+    chart.margins().bottom = 20;
+    chart.margins().left = 60;
+    chart.yAxis().ticks(6);
+    chart.render();
 }
 
 function clearFilters() {
@@ -404,7 +420,7 @@ function getBinSize(dateRange) {
     // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
     // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
     return ceiling(points / maxPoints);
-    //return 1;
+    //return 4;
 }
 
 function roundDate(date, firstDate, binSizeMilli) {
@@ -451,7 +467,7 @@ function plot(jsonp) {
     rangeDims[3] = rangexf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
     rangeDims[4] = rangexf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
 
-    ["total_conc"].forEach(function(key) {
+    ["par"].forEach(function(key) {
         groups[key] = {};
         [1,2,3,4].forEach(function(binSize) {
             groups[key][binSize] = rangeDims[binSize].group().reduce(
@@ -482,14 +498,15 @@ function plot(jsonp) {
     plotSeriesChart("conc", "Abundance (10^6 cells/L)");
     plotSeriesChart("size", "Forward scatter (a.u.)");
 
-    plotRangeChart("total_conc", "Total Abundance (10^6 cells/L)");
+    plotRangeChart("par", "PAR (w/m2)");
 
     var t3 = new Date().getTime();
 
-    console.log("transform time = " + ((t1 - t0) / 1000));
+    /*console.log("transform time = " + ((t1 - t0) / 1000));
     console.log("crossfilter setup time = " + ((t2 - t1) / 1000));
     console.log("plot time = " + ((t3 - t2) / 1000));
-    console.log("total time = " + ((t3 - t0) / 1000));
+    console.log("total time = " + ((t3 - t0) / 1000));*/
+
     // Set up basic population buttons
     popNames.forEach(function(pop) {
         makePopButton(pop);
