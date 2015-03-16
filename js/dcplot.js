@@ -8,6 +8,7 @@ var timeDims = {};
 var rangeDims = {};
 var timePopDims = {};
 var popDim;
+var timeFilter = null;
 
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
@@ -147,7 +148,7 @@ function reduceInitial() {
 // update plot.
 // TODO: consider doing this with additional dimensions.  Might be faster than
 // traversing entire data set every time.
-function recalculateY(chart, filter) {
+function recalculateY(chart) {
     if (chart.children !== undefined) {
         // Population series plot
         // key for dimension is [time, pop]
@@ -161,40 +162,31 @@ function recalculateY(chart, filter) {
         var timeKey = function(element) { return element.key; };
     }
 
-    if (filter) {
+    if (timeFilter) {
         var valuesInRange = chart.group().all().filter(function(element, index, array) {
-            return (timeKey(element) >= filter[0] && timeKey(element) < filter[1]);
+            return (timeKey(element) >= timeFilter[0] && timeKey(element) < timeFilter[1]);
         });
     } else {
         var valuesInRange = chart.group().all();
     }
-    var nonNull = valuesInRange.filter(function(d) { return d.value.total !== null; });
-    var minMaxY = d3.extent(nonNull, function(d) {
+    var hasData = valuesInRange.filter(function(d) {
+        return d.value.total !== null && d.value.count !== 0;
+    });
+    var minMaxY = d3.extent(hasData, function(d) {
         return d.value.total / d.value.count;
     });
     // Add 10% headroom above and below
     var diff = minMaxY[1] - minMaxY[0];
-    minMaxY[0] = minMaxY[0] - (diff * .1);
-    minMaxY[1] = minMaxY[1] + (diff * .1);
-    console.log(chart.yAxisLabel() + " minMaxY = " + minMaxY, filter);
-    chart.y(d3.scale.linear().domain(minMaxY));
-}
-
-function preRedrawHandler(chart) {
-    // Recalculate Y domain
-    //recalculateY(chart);
-
-    // Render
-    // This may seem strange to do right before redrawing, but is necessary
-    // to get dots drawn
-    //chart.render();
+    var minY = minMaxY[0] - (diff * .1);
+    var maxY = minMaxY[1] + (diff * .1);
+    console.log(chart.yAxisLabel(), minMaxY, [minY, maxY], timeFilter, diff);
+    chart.y(d3.scale.linear().domain([minY, maxY]));
 }
 
 // popFlags should be 
 function filterPops() {
-    if (popFlags === null) {
-        popDim.filterAll();  // remove filters
-    } else {
+    popDim.filterAll();  // remove filters
+    if (popFlags !== null) {
         popDim.filter(function(d) {
             return popFlags[d];
         });
@@ -202,13 +194,13 @@ function filterPops() {
 
     // Recalculate Y domain
     recalculateY(charts["conc"]);
-    //recalculateY(charts["size"]);
+    recalculateY(charts["size"]);
 
     // Have to render and redraw to get dots and Y Axis scaling drawn properly
     //charts["conc"].render();
     //charts["size"].render();
-    charts["conc"].redraw();
-    //charts["size"].redraw();
+    charts["conc"].render();
+    charts["size"].render();
 }
 
 function plotLineChart(key, yAxisLabel) {
@@ -241,8 +233,7 @@ function plotLineChart(key, yAxisLabel) {
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
         .title(function(d) {
             return d.key + '\n' + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
-        })
-        .on("preRedraw", preRedrawHandler);
+        });
     chart.render();
 }
 
@@ -304,8 +295,7 @@ function plotSeriesChart(key, yAxisLabel) {
                 fillOpacity: 0.8,
                 strokeOpacity: 0.8
             }
-        })
-        .on("preRedraw", preRedrawHandler);
+        });
     chart.margins().bottom = 20
     chart.render();
 }
@@ -337,6 +327,7 @@ function plotRangeChart(key, yAxisLabel) {
         var binSize = getBinSize(filter);
         console.log(binSize);
         clearFilters();
+        timeFilter = filter;
         if (filter === null) {
             console.log("Reset filter");
             filter = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
@@ -344,25 +335,26 @@ function plotRangeChart(key, yAxisLabel) {
 
         ["ocean_tmp", "salinity", "par"].forEach(function(key) {
             if (charts[key] !== undefined) {
-                console.log("switching dim/group for " + key);
+                //console.log("switching dim/group for " + key);
                 charts[key].dimension(timeDims[binSize]);
                 charts[key].group(groups[key][binSize]);
                 charts[key].x().domain([filter[0], filter[1]]);
-                recalculateY(charts[key], filter);
-                charts[key].redraw();
+                recalculateY(charts[key]);
+                charts[key].render();
             }
         });
 
         ["conc", "size"].forEach(function(key) {
             if (charts[key] !== undefined) {
-                console.log("switching dim/group for " + key);
+                //console.log("switching dim/group for " + key);
                 charts[key].dimension(timePopDims[binSize]);
                 charts[key].group(groups[key][binSize]);
                 charts[key].x().domain([filter[0], filter[1]]);
-                recalculateY(charts[key], filter);
-                charts[key].redraw();
+                recalculateY(charts[key]);
+                charts[key].render();
             }
         });
+        filterPops();
     });
 }
 
@@ -371,6 +363,7 @@ function clearFilters() {
         timeDims[binSize].filterAll();
         timePopDims[binSize].filterAll();
     });
+    popDim.filterAll();
 }
 
 function valueAccessor(d) {
