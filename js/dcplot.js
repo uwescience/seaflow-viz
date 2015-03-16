@@ -146,8 +146,6 @@ function reduceInitial() {
 
 // Recalculate y range for values in filterRange.  Must re-render/redraw to
 // update plot.
-// TODO: consider doing this with additional dimensions.  Might be faster than
-// traversing entire data set every time.
 function recalculateY(chart) {
     if (chart.children !== undefined) {
         // Population series plot
@@ -178,10 +176,9 @@ function recalculateY(chart) {
     var minMaxY = d3.extent(nonNull, function(d) {
         return valueAccessor(d);
     });
-    // Add 10% headroom above and below
-    var diff = minMaxY[1] - minMaxY[0];
-    var minY = minMaxY[0] - (diff * .1);
-    var maxY = minMaxY[1] + (diff * .1);
+    // Add 10% headroom above and below max value
+    var minY = minMaxY[0] - (minMaxY[1] * .1);
+    var maxY = minMaxY[1] + (minMaxY[1] * .1);
     console.log(chart.yAxisLabel(), minMaxY, [minY, maxY], timeFilter, diff);
     chart.y(d3.scale.linear().domain([minY, maxY]));
 }
@@ -354,7 +351,10 @@ function plotRangeChart(key, yAxisLabel) {
                 charts[key].group(groups[key][binSize]);
                 charts[key].x().domain([filter[0], filter[1]]);
                 recalculateY(charts[key]);
-                charts[key].render();
+
+                // no need if filterPops is run right after. It will render
+                // too.
+                //charts[key].render();
             }
         });
         filterPops();
