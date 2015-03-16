@@ -3,6 +3,11 @@ var charts = {};
 var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
 // Full names for legend
 var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
+var groups = {};
+var timeDims = {};
+var rangeDims = {};
+var timePopDims = {};
+var popDim;
 
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
@@ -50,7 +55,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data.slice(1,25)) {
+    for (var i in jsonp.data) {
         var curTime = new Date(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -106,6 +111,7 @@ function transformData(jsonp) {
 // missing data.
 function reduceAdd(key) {
     return function(p, v) {
+        //console.log("adding: ", v.pop, v.time, v[key], p.count, p.total);
         if (v[key] !== null) {
             ++p.count;
         }
@@ -114,6 +120,7 @@ function reduceAdd(key) {
         if (p.total !== null || v[key] !== null) {
             p.total += v[key];
         }
+        //console.log(p.count, p.total);
         return p;
     }
 }
@@ -140,12 +147,14 @@ function reduceInitial() {
 // update plot.
 // TODO: consider doing this with additional dimensions.  Might be faster than
 // traversing entire data set every time.
-function recalculateY(chart) {
-    var filter = chart.filter();
+function recalculateY(chart, filter) {
     if (chart.children !== undefined) {
         // Population series plot
         // key for dimension is [time, pop]
-        var timeKey = function(element) { return element.key[0]; };
+        var timeKey = function(element) {
+            var parts = element.key.split("_");
+            return new Date(+parts[0]);
+        };
     } else {
         // Single line chart
         // key for dimension is time
@@ -167,15 +176,13 @@ function recalculateY(chart) {
     var diff = minMaxY[1] - minMaxY[0];
     minMaxY[0] = minMaxY[0] - (diff * .1);
     minMaxY[1] = minMaxY[1] + (diff * .1);
+    console.log(chart.yAxisLabel() + " minMaxY = " + minMaxY, filter);
     chart.y(d3.scale.linear().domain(minMaxY));
 }
 
 function preRedrawHandler(chart) {
-    // Add dots if time range is small
-    //addDots(chart);
-
     // Recalculate Y domain
-    recalculateY(chart);
+    //recalculateY(chart);
 
     // Render
     // This may seem strange to do right before redrawing, but is necessary
@@ -184,40 +191,35 @@ function preRedrawHandler(chart) {
 }
 
 // popFlags should be 
-function filterPops(dim) {
+function filterPops() {
     if (popFlags === null) {
-        dim.filterAll();  // remove filters
+        popDim.filterAll();  // remove filters
     } else {
-        dim.filter(function(d) {
+        popDim.filter(function(d) {
             return popFlags[d];
         });
     }
-    // Add dots if time range is small
-    //addDots(charts["conc"]);
-    //addDots(charts["size"]);
 
     // Recalculate Y domain
     recalculateY(charts["conc"]);
-    recalculateY(charts["size"]);
+    //recalculateY(charts["size"]);
 
     // Have to render and redraw to get dots and Y Axis scaling drawn properly
     //charts["conc"].render();
     //charts["size"].render();
     charts["conc"].redraw();
-    charts["size"].redraw();
+    //charts["size"].redraw();
 }
 
-function plotLineChart(timeDim, key, yAxisLabel) {
+function plotLineChart(key, yAxisLabel) {
     var chart = dc.lineChart("#" + key);
     charts[key] = chart;
 
-    var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var functs = getLineChartFunctions(minMaxTime[0], minMaxTime);
-
-    var keyGroup = timeDim.group(functs.group).reduce(
-        reduceAdd(key), reduceRemove(key), reduceInitial);
-
-    var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
+    var minMaxTime = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    var binSize = getBinSize(minMaxTime);
+    var dim = timeDims[binSize];
+    var group = groups[key][binSize];
+    var minMaxY = d3.extent(group.all(), valueAccessor);
 
     chart
         .width(768)
@@ -233,29 +235,37 @@ function plotLineChart(timeDim, key, yAxisLabel) {
         })
         .yAxisLabel(yAxisLabel)
         .interpolate("cardinal")
-        .dimension(timeDim)
-        .group(keyGroup)
-        .valueAccessor(functs.valueAccessor)
+        .dimension(dim)
+        .group(group)
+        .valueAccessor(valueAccessor)
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
         .title(function(d) {
-            return d.key + '\n' + d3.format(".3n")(d.value.total / d.value.count) + "\n" + d.value.total + "\n" + d.value.count;
+            return d.key + '\n' + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
         })
         .on("preRedraw", preRedrawHandler);
     chart.render();
 }
 
-function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
+function plotSeriesChart(key, yAxisLabel) {
     var popLookup = {"prochloro": "Prochlorococcus", "synecho": "Synechococcus", "picoeuk": "Picoeukaryotes", "beads": "Beads"};
     var chart = dc.seriesChart("#" + key);
     charts[key] = chart;
 
-    var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var functs = getSeriesChartFunctions(minMaxTime[0], minMaxTime);
+    var minMaxTime = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    var binSize = getBinSize(minMaxTime);
+    var dim = timePopDims[binSize];
+    var group = groups[key][binSize];
+    var minMaxY = d3.extent(group.all(), valueAccessor);
 
-    var keyGroup = timePopDim.group(functs.group).reduce(
-        reduceAdd(key), reduceRemove(key), reduceInitial);
+    var keyAccessor = function(d) {
+        var parts = d.key.split("_");
+        return new Date(+parts[0]);
+    };
+    var seriesAccessor = function(d) {
+        return popLookup[d.key.split("_")[1]];
+    };
 
-    var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
+    var minMaxY = d3.extent(group.all(), valueAccessor);
 
     chart
         .width(768)
@@ -263,16 +273,16 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
         .chart(dc.lineChart)
         .x(d3.time.scale.utc().domain(minMaxTime))
         .y(d3.scale.linear().domain(minMaxY))
-        .dimension(timePopDim)
-        .group(keyGroup)
-        .seriesAccessor(function(d) { return popLookup[d.key[1]]; })
-        .keyAccessor(functs.keyAccessor)
-        .valueAccessor(functs.valueAccessor)
+        .dimension(dim)
+        .group(group)
+        .seriesAccessor(seriesAccessor)
+        .keyAccessor(keyAccessor)
+        .valueAccessor(valueAccessor)
         .brushOn(false)
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
         .title(function(d) {
-            return d.key[0] + '\n' + d.key[1] + "\n" + d3.format(".3n")(functs.valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
+            return d.key + "\n" + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
         })
         .legend(dc.legend()
             .x(75)
@@ -300,15 +310,15 @@ function plotSeriesChart(timeDim, timePopDim, key, yAxisLabel) {
     chart.render();
 }
 
-function plotRangeChart(timeDim, key, yAxisLabel) {
+function plotRangeChart(key, yAxisLabel) {
     var rangeChart = dc.lineChart("#rangeChart");
     charts["rangeChart"] = rangeChart;
 
-    var minMaxTime = [timeDim.bottom(1)[0].time, timeDim.top(1)[0].time];
-    var functs = getLineChartFunctions(minMaxTime[0], minMaxTime);
-    var keyGroup = dummyGroup(timeDim.group(functs.group).reduce(
-        reduceAdd(key), reduceRemove(key), reduceInitial));
-    var minMaxY = d3.extent(keyGroup.all(), functs.valueAccessor);
+    var minMaxTime = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    var binSize = getBinSize(minMaxTime);
+    var dim = timeDims[binSize];
+    var group = groups[key][binSize];
+    var minMaxY = d3.extent(group.all(), valueAccessor);
 
     rangeChart
         .width(768)
@@ -318,21 +328,60 @@ function plotRangeChart(timeDim, key, yAxisLabel) {
         .interpolate("cardinal")
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
-        .dimension(timeDim)
-        .group(keyGroup)
-        .valueAccessor(functs.valueAccessor)
+        .dimension(dim)
+        .group(group)
+        .valueAccessor(valueAccessor)
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     rangeChart.render();
     rangeChart.on("filtered", function(chart, filter) {
-        //charts["ocean_tmp"].focus(filter);
-        //charts["salinity"].focus(filter);
-        charts["par"].focus(filter);
-        //charts["conc"].focus(filter);
-        //charts["size"].focus(filter);
+        var binSize = getBinSize(filter);
+        console.log(binSize);
+        clearFilters();
+        if (filter === null) {
+            console.log("Reset filter");
+            filter = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+        }
+
+        ["ocean_tmp", "salinity", "par"].forEach(function(key) {
+            console.log("switching dim/group for " + key);
+            timeDims[binSize].filterAll();
+            charts[key].dimension(timeDims[binSize]);
+            charts[key].group(groups[key][binSize]);
+            charts[key].x().domain([filter[0], filter[1]]);
+            recalculateY(charts[key], filter);
+            charts[key].redraw();
+        });
+
+        /*["conc", "size"].forEach(function(key) {
+            if (charts[key].dim !== timePopDims[binSize]) {
+                charts[key].dimension(timePopDims[binSize]);
+                charts[key].group(groups[key][binSize]);
+            }
+            charts[key].focus(filter);
+        });*/
     });
 }
 
+function clearFilters() {
+    ["ocean_tmp", "salinity", "par"].forEach(function(key) {
+        [1,2,3,4].forEach(function(binSize) {
+            timeDims[binSize].filterAll();
+        });
+    });
+}
+
+function valueAccessor(d) {
+    if (d.value.total === null || d.value.count === 0) {
+        return null;
+    } else {
+        return d.value.total / d.value.count;
+    }
+}
+
 function getBinSize(dateRange) {
+    if (dateRange === null) {
+        dateRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    }
     var maxPoints = 480;
 
     // Find number of points for 3 minute buckets in timeRange
@@ -344,78 +393,14 @@ function getBinSize(dateRange) {
     // below maxPoints. e.g. if there are 961 3 minute points in range,
     // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
     // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
-    //return ceiling(points / maxPoints) * msIn3Min;  // in milliseconds
-    return 4 * msIn3Min;
+    return ceiling(points / maxPoints);
+    //return 1;
 }
 
-function getLineChartFunctions(firstDate, dateRange) {
-    var msIn3Min = 3 * 60 * 1000;
-    var binSize = getBinSize(dateRange);
-    //console.log("lineChart binSize = " + (binSize/msIn3Min));
-
-    var start = new Date(firstDate.getTime());
-
-    var functs = {
-        valueAccessor: function(d) {
-            if (d.value.total === null || d.value.count === 0) {
-                return null;
-            } else {
-                return d.value.total / d.value.count;
-            }
-        }
-    };
-
-    if (binSize === msIn3Min) {
-        // No binning in larger time slices necessary
-        // Use default grouping
-        functs.group = function(d) { return d; };
-    } else {
-        // Functions to bin in larger time slices
-        functs.group = function(d) {
-            var binOffset = Math.floor((d.getTime() - start.getTime()) / binSize);
-            var offset = binOffset * binSize;
-            var groupValue = new Date(start.getTime() + offset);
-            return groupValue;
-        };
-    }
-    return functs;
-}
-
-function getSeriesChartFunctions(firstDate, dateRange) {
-    var msIn3Min = 3 * 60 * 1000;
-    var binSize = getBinSize(dateRange);
-    //console.log("seriesChart binSize = " + (binSize/msIn3Min));
-
-    // Reset to first hour UTC
-    var start = new Date(firstDate.getTime());
-
-    var functs = {
-        valueAccessor: function(d) {
-            if (d.value.total === null || d.value.count === 0) {
-                return null;
-            } else {
-                return d.value.total / d.value.count;
-            }
-        },
-        keyAccessor: function(d) {
-            return d.key[0];
-        }
-    };
-
-    if (binSize === msIn3Min) {
-        // No binning in larger time slices necessary
-        // Use default grouping
-        functs.group = function(d) { return d; };
-    } else {
-        // Functions to bin in larger time slices
-        functs.group = function(d) {
-            var binOffset = Math.floor((d[0].getTime() - start.getTime()) / binSize);
-            var offset = binOffset * binSize;
-            var groupValue = [new Date(start.getTime() + offset), d[1]];
-            return groupValue;
-        };
-    }
-    return functs;
+function roundDate(date, firstDate, binSizeMilli) {
+    var offset = Math.floor((date.getTime() - firstDate.getTime()) / binSizeMilli) * binSizeMilli;
+    //if (binSize === 4) {console.log(date, firstDate, binSize, offset);}
+    return new Date(firstDate.getTime() + offset);
 }
 
 function ceiling(input) {
@@ -423,37 +408,74 @@ function ceiling(input) {
 }
 
 function plot(jsonp) {
+    dc.disableTransitions = true;
+    var t0 = new Date().getTime();
+
     var data = transformData(jsonp);
 
-    var sflxf = crossfilter(data["sfl"]);
-    var popxf = crossfilter(data["pop"]);
+    var t1 = new Date().getTime();
 
-    var timeDim = sflxf.dimension(function(d) { return d.time; });
-    var timePopDim = popxf.dimension(function(d) { return [d.time, d.pop]; });
-    var popDim = popxf.dimension(function(d) { return d.pop; });
+    var sflxf = crossfilter(data["sfl"]),
+        popxf = crossfilter(data["pop"]);
 
-    //plotLineChart(timeDim, "ocean_tmp", "Temp (degC)");
-    //plotLineChart(timeDim, "salinity", "Salinity (psu)");
-    plotLineChart(timeDim, "par", "PAR (w/m2)");
-    //plotLineChart2(timeDim, "par2", "PAR (w/m2)");
+    var msIn3Min = 3 * 60 * 1000;
+    timeDims[1] = sflxf.dimension(function(d) { return d.time; });
+    var first = timeDims[1].bottom(1)[0].time;
+    timeDims[2] = sflxf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
+    timeDims[3] = sflxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
+    timeDims[4] = sflxf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
 
-    plotSeriesChart(timeDim, timePopDim, "conc", "Abundance (10^6 cells/L)");
-    plotSeriesChart(timeDim, timePopDim, "size", "Forward scatter (a.u.)");
+    ["ocean_tmp", "salinity", "par", "total_conc"].forEach(function(key) {
+        groups[key] = {};
+        [1,2,3,4].forEach(function(binSize) {
+            groups[key][binSize] = timeDims[binSize].group().reduce(
+                reduceAdd(key), reduceRemove(key), reduceInitial);
+        });
+    });
 
-    //plotRangeChart(timeDim, "total_conc", "Total Abundance (10^6 cells/L)");
+    timePopDims[1] = popxf.dimension(function(d) { return String(d.time.getTime()) + "_" + d.pop; });
+    timePopDims[2] = popxf.dimension(function(d) { return String(roundDate(d.time, first, 2*msIn3Min).getTime()) + "_" + d.pop; });
+    timePopDims[3] = popxf.dimension(function(d) { return String(roundDate(d.time, first, 3*msIn3Min).getTime()) + "_" + d.pop; });
+    timePopDims[4] = popxf.dimension(function(d) { return String(roundDate(d.time, first, 4*msIn3Min).getTime()) + "_" + d.pop; });
+    popDim = popxf.dimension(function(d) { return d.pop; });
 
+    ["conc", "size"].forEach(function(key) {
+        groups[key] = {};
+        [1,2,3,4].forEach(function(binSize) {
+            groups[key][binSize] = timePopDims[binSize].group().reduce(
+                reduceAdd(key), reduceRemove(key), reduceInitial);
+        });
+    });
+
+    var t2 = new Date().getTime();
+
+    plotLineChart("ocean_tmp", "Temp (degC)");
+    plotLineChart("salinity", "Salinity (psu)");
+    plotLineChart("par", "PAR (w/m2)");
+
+    //plotSeriesChart("conc", "Abundance (10^6 cells/L)");
+    //plotSeriesChart("size", "Forward scatter (a.u.)");
+
+    plotRangeChart("total_conc", "Total Abundance (10^6 cells/L)");
+
+    var t3 = new Date().getTime();
+
+    console.log("transform time = " + ((t1 - t0) / 1000));
+    console.log("crossfilter setup time = " + ((t2 - t1) / 1000));
+    console.log("plot time = " + ((t3 - t2) / 1000));
+    console.log("total time = " + ((t3 - t0) / 1000));
     // Set up basic population buttons
     popNames.forEach(function(pop) {
-        makePopButton(pop, popDim);
+        makePopButton(pop);
     });
 }
 
-function makePopButton(popName, dim) {
+function makePopButton(popName) {
     var button = document.getElementById(popName + "Button");
     button.style.cursor = "pointer";
     button.onclick = function() {
         popFlags[popName] = !popFlags[popName];
-        filterPops(dim);
+        filterPops();
     };
 }
 
