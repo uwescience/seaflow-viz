@@ -13,6 +13,7 @@ var sflxf;
 var rangexf;
 var popxf;
 var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S UTC");
+var pinnedToMostRecent = false;  // should time selection be pinned to most recent data?
 
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
@@ -65,7 +66,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data) {
+    for (var i in jsonp.data.slice(0,450)) {
         var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -342,6 +343,9 @@ function plotRangeChart(yAxisLabel) {
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     chart.on("filtered", function(chart, filter) {
         dc.events.trigger(function() {
+            if (filter !== null) {
+                console.log("focus range set to " + filter.map(d3.time.format.utc("%Y-%m-%d %H:%M:%S %p")).join(" - "));
+            }
             updateCharts();
         }, 400);
     });
@@ -358,12 +362,21 @@ function updateCharts() {
     if (charts.rangeChart.filter() === null) {
         timeRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
     } else {
-        timeRange = charts.rangeChart.filter();
-        console.log(timeRange.map(d3.time.format.utc("%Y-%m-%d %H:%M:%S %p")));
+        // If a time window is selected and it extends to the latest time point
+        // then we set pinnedToMostRecent to true to make sure window always
+        // stays pinned to the right when new data is added
+        if (charts.rangeChart.filter()[1].getTime() === timeDims[1].top(1)[0].time.getTime()) {
+            pinnedToMostRecent = true;
+            console.log("focus range pinned to most recent");
+        } else {
+            pinnedToMostRecent = false;
+            console.log("focus range unpinned");
+        }
+        timeRange = charts.rangeChart.filter();  // set timeRange to filter window
     }
 
     var binSize = getBinSize(timeRange);
-    console.log(binSize);
+    console.log("points per bin = " + binSize);
     
     // Clear filters for instrument plots and population plots
     [1,2,3,4].forEach(function(binSize) {
@@ -418,6 +431,16 @@ function updateRangeChart() {
         // filtering works.
         var filter = charts.rangeChart.filter();
         if (filter !== null) {
+            // If the focus range is pinned to the right of the x axis (most recent)
+            // then 
+            if (pinnedToMostRecent) {
+                // how much time has been added
+                var delta = totalTimeRange[1].getTime() - filter[1].getTime();
+                // set right boundary to latest time
+                filter[1] = totalTimeRange[1];
+                // move left boundary forward by delta
+                filter[0] = new Date(filter[0].getTime() + delta);
+            }
             charts.rangeChart.dimension().filterAll();  // clear filter on current dim
             rangeDims[rangeBinSize].filter(filter);     // set filter on new dim
         }
@@ -430,7 +453,7 @@ function updateRangeChart() {
         // Also need to reset the brush extent to compensate for any potential
         // shifts in the X axis
         if (filter !== null) {
-            charts.rangeChart.brush().extent(charts.rangeChart.brush().extent());
+            charts.rangeChart.brush().extent(filter);
         }
         charts.rangeChart.render();
     }
@@ -569,25 +592,25 @@ function initialize() {
     query += "ORDER BY [time] ASC";
     executeSqlQuery(query, plot);
 
-    updateInterval = setInterval(update, 15000);
+    updateInterval = setInterval(update, 10000);
 }
 
 function update() {
     if (timeDims[1] !== undefined) {
         var latestTime = timeDims[1].top(1)[0].time;
         var tsqlFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S %p");
-        var query = "SELECT *, (IsNull(prochloro_conc, 0) + IsNull(synecho_conc, 0) + IsNull(picoeuk_conc, 0) + IsNull(beads_conc, 0)) as total_conc ";
+        var query = "SELECT TOP(1) *, (IsNull(prochloro_conc, 0) + IsNull(synecho_conc, 0) + IsNull(picoeuk_conc, 0) + IsNull(beads_conc, 0)) as total_conc ";
         query += "FROM [seaflow.viz@gmail.com].[seaflow all query] ";
         query += "WHERE [time] > '" + tsqlFormat(latestTime) + "' ";
         query += "ORDER BY [time] ASC";
-        clearInterval(updateInterval);
+        //clearInterval(updateInterval);
         executeSqlQuery(query, function(jsonp) {
             var data = transformData(jsonp);
             sflxf.add(data.sfl);
             popxf.add(data.pop);
             rangexf.add(data.range);
-            updateCharts();
             updateRangeChart();
+            updateCharts();
         });
     }
 }
