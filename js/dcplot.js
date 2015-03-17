@@ -3,6 +3,12 @@ var charts = {};
 var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
 // Full names for legend
 var popLabels = ["Prochlorococcus", "Synechococcus", "Picoeukaryotes", "Beads"];
+// Lookup table between pop database shortnames / object keys and common names
+var popLookup = {};
+for (var i = 0; i < popNames.length; i++) {
+    popLookup[popNames[i]] = popLabels[i];
+    popLookup[popLabels[i]] = popNames[i];
+}
 var groups = {};
 var timeDims = {};
 var rangeDims = {};
@@ -14,6 +20,7 @@ var rangexf;
 var popxf;
 var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S UTC");
 var pinnedToMostRecent = false;  // should time selection be pinned to most recent data?
+var legendChartKey = "size";  // key for chart which contains pop legend
 
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
@@ -66,7 +73,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data.slice(0,450)) {
+    for (var i in jsonp.data.slice(0,460)) {
         var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -156,64 +163,6 @@ function reduceInitial() {
     return { count: 0, total: null };
 }
 
-// Recalculate y range for values in filterRange.  Must re-render/redraw to
-// update plot.
-function recalculateY(chart) {
-    if (chart.children !== undefined) {
-        // Population series plot
-        // key for dimension is [time, pop]
-        var timeKey = function(element) {
-            var parts = element.key.split("_");
-            return new Date(+parts[0]);
-        };
-    } else {
-        // Single line chart
-        // key for dimension is time
-        var timeKey = function(element) { return element.key; };
-    }
-
-    if (timeRange) {
-        var valuesInRange = chart.group().all().filter(function(element, index, array) {
-            return (timeKey(element) >= timeRange[0] && timeKey(element) < timeRange[1]);
-        });
-    } else {
-        var valuesInRange = chart.group().all();
-    }
-
-    // If data has been filtered, some group elements may have no data, which would
-    // cause minMaxY to always anchor at 0. Filter out those values here.
-    var nonNull = valuesInRange.filter(function(d) {
-        return valueAccessor(d) !== null;
-    });
-    var minMaxY = d3.extent(nonNull, function(d) {
-        return valueAccessor(d);
-    });
-    // Make sure there is some distance within Y axis if all values are the same
-    if (minMaxY[1] - minMaxY[0] === 0) {
-        minMaxY[0] -= .1;
-        minMaxY[1] += .1;
-    }
-    chart.y(d3.scale.linear().domain(minMaxY));
-}
-
-// popFlags should be 
-function filterPops() {
-    popDim.filterAll();  // remove filters
-    if (popFlags !== null) {
-        popDim.filter(function(d) {
-            return popFlags[d];
-        });
-    }
-
-    // Recalculate Y domain
-    recalculateY(charts["conc"]);
-    recalculateY(charts["size"]);
-
-    // Have to render and redraw to get Y Axis scaling drawn properly
-    charts["conc"].render();
-    charts["size"].render();
-}
-
 function plotLineChart(key, yAxisLabel) {
     var chart = dc.lineChart("#" + key);
     charts[key] = chart;
@@ -251,8 +200,7 @@ function plotLineChart(key, yAxisLabel) {
     chart.render();
 }
 
-function plotSeriesChart(key, yAxisLabel) {
-    var popLookup = {"prochloro": "Prochlorococcus", "synecho": "Synechococcus", "picoeuk": "Picoeukaryotes", "beads": "Beads"};
+function plotSeriesChart(key, yAxisLabel, legendFlag) {
     var chart = dc.seriesChart("#" + key);
     charts[key] = chart;
 
@@ -274,10 +222,11 @@ function plotSeriesChart(key, yAxisLabel) {
     };
 
     var minMaxY = d3.extent(group.all(), valueAccessor);
+    var legendHeight = 15;  // size of legend
 
     chart
         .width(768)
-        .height(150)
+        .height(200)
         .chart(dc.lineChart)
         .x(d3.time.scale.utc().domain(minMaxTime))
         .y(d3.scale.linear().domain(minMaxY))
@@ -292,14 +241,6 @@ function plotSeriesChart(key, yAxisLabel) {
         .title(function(d) {
             return labelFormat(keyAccessor(d)) + "\n" + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
         })
-        .legend(dc.legend()
-            .x(75)
-            .y(100)
-            .itemHeight(13)
-            .gap(5)
-            .horizontal(true)
-            .autoItemWidth(true)
-        )
         .childOptions(
         {
             defined: function(d) {
@@ -313,9 +254,26 @@ function plotSeriesChart(key, yAxisLabel) {
                 strokeOpacity: 0.8
             }
         });
-    chart.margins().bottom = 40;
+    chart.margins().bottom = 20;
     chart.margins().left = 60;
     chart.yAxis().ticks(6);
+
+    // Legend setup
+    if (legendFlag) {
+        chart.legend(dc.legend()
+            .x(175)
+            .y(chart.height() - (2 * legendHeight) + Math.floor(legendHeight/2))
+            .itemHeight(legendHeight)
+            .gap(10)
+            .horizontal(true)
+            .autoItemWidth(true)
+        );
+        chart.margins().bottom += 2 * legendHeight;  // room for legend
+    } else {
+        // adjust chart size so that plot area is same size as chart with legend
+        chart.height(chart.height() - 2 * legendHeight);
+    }
+    
     chart.render();
 }
 
@@ -411,6 +369,9 @@ function updateCharts() {
     });
     filterPops();
 
+    // Need to reconfigure onclick for legend buttons after render
+    configurePopButtons();
+
     var t1 = new Date();
     //console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
 }
@@ -468,6 +429,46 @@ function valueAccessor(d) {
     } else {
         return d.value.total / d.value.count;
     }
+}
+
+// Recalculate y range for values in filterRange.  Must re-render/redraw to
+// update plot.
+function recalculateY(chart) {
+    if (chart.children !== undefined) {
+        // Population series plot
+        // key for dimension is [time, pop]
+        var timeKey = function(element) {
+            var parts = element.key.split("_");
+            return new Date(+parts[0]);
+        };
+    } else {
+        // Single line chart
+        // key for dimension is time
+        var timeKey = function(element) { return element.key; };
+    }
+
+    if (timeRange) {
+        var valuesInRange = chart.group().all().filter(function(element, index, array) {
+            return (timeKey(element) >= timeRange[0] && timeKey(element) < timeRange[1]);
+        });
+    } else {
+        var valuesInRange = chart.group().all();
+    }
+
+    // If data has been filtered, some group elements may have no data, which would
+    // cause minMaxY to always anchor at 0. Filter out those values here.
+    var nonNull = valuesInRange.filter(function(d) {
+        return valueAccessor(d) !== null;
+    });
+    var minMaxY = d3.extent(nonNull, function(d) {
+        return valueAccessor(d);
+    });
+    // Make sure there is some distance within Y axis if all values are the same
+    if (minMaxY[1] - minMaxY[0] === 0) {
+        minMaxY[0] -= .1;
+        minMaxY[1] += .1;
+    }
+    chart.y(d3.scale.linear().domain(minMaxY));
 }
 
 function getBinSize(dateRange) {
@@ -558,8 +559,9 @@ function plot(jsonp) {
     plotLineChart("salinity", "Salinity (psu)");
     plotLineChart("par", "PAR (w/m2)");
 
-    plotSeriesChart("conc", "Abundance (10^6 cells/L)");
-    plotSeriesChart("size", "Forward scatter (a.u.)");
+    plotSeriesChart("conc", "Abundance (10^6 cells/L)", legendChartKey === "conc");
+    plotSeriesChart("size", "Forward scatter (a.u.)", legendChartKey === "size");
+    configurePopButtons();
 
     plotRangeChart("PAR (w/m2)");
 
@@ -569,20 +571,41 @@ function plot(jsonp) {
     console.log("crossfilter setup time = " + ((t2 - t1) / 1000));
     console.log("plot time = " + ((t3 - t2) / 1000));
     console.log("total time = " + ((t3 - t0) / 1000));*/
+}
 
-    // Set up basic population buttons
-    popNames.forEach(function(pop) {
-        makePopButton(pop);
+// Needs to be called after chart with population legend is rendered.
+// Rendering resets onclick handler for buttons.
+function configurePopButtons() {
+    var chart = charts[legendChartKey];
+    var legendGroups = chart.selectAll("g.dc-legend-item");
+    legendGroups[0].forEach(function(g) {
+        var commonPopName = g.children[1].innerHTML;
+        var popName = popLookup[commonPopName];
+        g.onclick = function() {
+            // Show / Hide population specific data
+            popFlags[popName] = !popFlags[popName];
+            filterPops();
+        };
     });
 }
 
-function makePopButton(popName) {
-    var button = document.getElementById(popName + "Button");
-    button.style.cursor = "pointer";
-    button.onclick = function() {
-        popFlags[popName] = !popFlags[popName];
-        filterPops();
-    };
+function filterPops() {
+    popDim.filterAll();  // remove filters
+    if (popFlags !== null) {
+        popDim.filter(function(d) {
+            return popFlags[d];
+        });
+    }
+
+    // Recalculate Y domain
+    recalculateY(charts["conc"]);
+    recalculateY(charts["size"]);
+
+    // Have to render and redraw to get Y Axis scaling drawn properly
+    charts["conc"].render();
+    charts["size"].render();
+
+    configurePopButtons();
 }
 
 function initialize() {
@@ -592,7 +615,7 @@ function initialize() {
     query += "ORDER BY [time] ASC";
     executeSqlQuery(query, plot);
 
-    updateInterval = setInterval(update, 10000);
+    //updateInterval = setInterval(update, 10000);
 }
 
 function update() {
