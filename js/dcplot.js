@@ -8,7 +8,10 @@ var timeDims = {};
 var rangeDims = {};
 var timePopDims = {};
 var popDim;
-var timeFilter = null;
+var timeRange = null;
+var sflxf;
+var rangexf;
+var popxf;
 var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S UTC");
 
 var popFlags = {};
@@ -168,9 +171,9 @@ function recalculateY(chart) {
         var timeKey = function(element) { return element.key; };
     }
 
-    if (timeFilter) {
+    if (timeRange) {
         var valuesInRange = chart.group().all().filter(function(element, index, array) {
-            return (timeKey(element) >= timeFilter[0] && timeKey(element) < timeFilter[1]);
+            return (timeKey(element) >= timeRange[0] && timeKey(element) < timeRange[1]);
         });
     } else {
         var valuesInRange = chart.group().all();
@@ -258,9 +261,6 @@ function plotSeriesChart(key, yAxisLabel) {
     var group = groups[key][binSize];
     var minMaxY = d3.extent(group.all(), valueAccessor);
 
-    // This function take a significant amount of time (see browser profiling)
-    // TODO: consider setting up population charts so that custom keyAccessor
-    // is unnecessary.
     // As small performance improvement, hardcode substring positions since
     // we know the key is always something like "1426522573342_key" and the
     // length of the milliseconds string from Date.getTime() won't change until
@@ -312,20 +312,20 @@ function plotSeriesChart(key, yAxisLabel) {
                 strokeOpacity: 0.8
             }
         });
-    chart.margins().bottom = 20;
+    chart.margins().bottom = 40;
     chart.margins().left = 60;
     chart.yAxis().ticks(6);
     chart.render();
 }
 
-function plotRangeChart(key, yAxisLabel) {
+function plotRangeChart(yAxisLabel) {
     var chart = dc.lineChart("#rangeChart");
-    charts["rangeChart"] = rangeChart;
+    charts["rangeChart"] = chart;
 
     var minMaxTime = [rangeDims[1].bottom(1)[0].time, rangeDims[1].top(1)[0].time];
     var binSize = getBinSize(minMaxTime);
     var dim = rangeDims[binSize];
-    var group = groups[key][binSize];
+    var group = groups.rangeChart[binSize];
     var minMaxY = d3.extent(group.all(), valueAccessor);
 
     chart
@@ -342,44 +342,7 @@ function plotRangeChart(key, yAxisLabel) {
         .defined(function(d) { return (d.y !== null); });  // don't plot segements with missing data
     chart.on("filtered", function(chart, filter) {
         dc.events.trigger(function() {
-            var t0 = new Date();
-            var binSize = getBinSize(filter);
-            //console.log(binSize);
-            clearFilters();
-            timeFilter = filter;
-            if (filter === null) {
-                filter = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
-            }
-
-            ["ocean_tmp", "salinity", "par"].forEach(function(key) {
-                if (charts[key] !== undefined) {
-                    //console.log("switching dim/group for " + key);
-                    charts[key].dimension(timeDims[binSize]);
-                    charts[key].group(groups[key][binSize]);
-                    charts[key].expireCache();
-                    charts[key].x().domain([filter[0], filter[1]]);
-                    recalculateY(charts[key]);
-                    charts[key].render();
-                }
-            });
-
-            ["conc", "size"].forEach(function(key) {
-                if (charts[key] !== undefined) {
-                    //console.log("switching dim/group for " + key);
-                    charts[key].dimension(timePopDims[binSize]);
-                    charts[key].group(groups[key][binSize]);
-                    charts[key].expireCache();
-                    charts[key].x().domain([filter[0], filter[1]]);
-                    recalculateY(charts[key]);
-
-                    // no need if filterPops is run right after. It will render
-                    // too.
-                    //charts[key].render();
-                }
-            });
-            filterPops();
-            var t1 = new Date();
-            //console.log("filtered took " + (t1.getTime() - t0.getTime()) / 1000);
+            updateCharts();
         }, 400);
     });
     chart.margins().bottom = 20;
@@ -388,12 +351,92 @@ function plotRangeChart(key, yAxisLabel) {
     chart.render();
 }
 
-function clearFilters() {
+function updateCharts() {
+    var t0 = new Date();
+
+    // No time window selected, reset timeRange to entire cruise
+    if (charts.rangeChart.filter() === null) {
+        timeRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    } else {
+        timeRange = charts.rangeChart.filter();
+        console.log(timeRange.map(d3.time.format.utc("%Y-%m-%d %H:%M:%S %p")));
+    }
+
+    var binSize = getBinSize(timeRange);
+    console.log(binSize);
+    
+    // Clear filters for instrument plots and population plots
     [1,2,3,4].forEach(function(binSize) {
-        //timeDims[binSize].filterAll();
+        timeDims[binSize].filterAll();
         timePopDims[binSize].filterAll();
     });
+    // Reset population filters
     popDim.filterAll();
+    
+    ["ocean_tmp", "salinity", "par"].forEach(function(key) {
+        if (charts[key] !== undefined) {
+            charts[key].dimension(timeDims[binSize]);
+            charts[key].group(groups[key][binSize]);
+            charts[key].expireCache();
+            charts[key].x().domain(timeRange);
+            recalculateY(charts[key]);
+            charts[key].render();
+        }
+    });
+
+    ["conc", "size"].forEach(function(key) {
+        if (charts[key] !== undefined) {
+            charts[key].dimension(timePopDims[binSize]);
+            charts[key].group(groups[key][binSize]);
+            charts[key].expireCache();
+            charts[key].x().domain(timeRange);
+            recalculateY(charts[key]);
+
+            // no need if filterPops is run right after. It will render too
+            //charts[key].render();
+        }
+    });
+    filterPops();
+
+    var t1 = new Date();
+    //console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
+}
+
+function updateRangeChart() {
+    var t0 = new Date();
+    if (charts.rangeChart !== undefined) {
+        // Note: rangeChart always shows the full time range, not current value of
+        // timeRange, which may be a user selected time window.
+        // rangeChart gets it's own bin size because it's always based on total
+        // time range, not based on a possibly user selected time range
+        var totalTimeRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+        var rangeBinSize = getBinSize(totalTimeRange);
+
+        // If we don't reset filters on dimensions here the re-render of the
+        // time window selection will only show filtered data points if the
+        // dimension changes.  This is due to the way crossfilter dimension
+        // filtering works.
+        var filter = charts.rangeChart.filter();
+        if (filter !== null) {
+            charts.rangeChart.dimension().filterAll();  // clear filter on current dim
+            rangeDims[rangeBinSize].filter(filter);     // set filter on new dim
+        }
+        charts.rangeChart.dimension(rangeDims[rangeBinSize]);
+        charts.rangeChart.group(groups.rangeChart[rangeBinSize]);
+        charts.rangeChart.expireCache();
+        var minMaxY = d3.extent(groups.rangeChart[rangeBinSize].all(), valueAccessor);
+        charts.rangeChart.x().domain(totalTimeRange);
+        charts.rangeChart.y().domain(minMaxY);
+        // Also need to reset the brush extent to compensate for any potential
+        // shifts in the X axis
+        if (filter !== null) {
+            charts.rangeChart.brush().extent(charts.rangeChart.brush().extent());
+        }
+        charts.rangeChart.render();
+    }
+
+    var t1 = new Date();
+    //console.log("range chart update took " + (t1.getTime() - t0.getTime()) / 1000);
 }
 
 function valueAccessor(d) {
@@ -405,9 +448,6 @@ function valueAccessor(d) {
 }
 
 function getBinSize(dateRange) {
-    if (dateRange === null) {
-        dateRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
-    }
     var maxPoints = 480;
 
     // Find number of points for 3 minute buckets in timeRange
@@ -425,7 +465,6 @@ function getBinSize(dateRange) {
 
 function roundDate(date, firstDate, binSizeMilli) {
     var offset = Math.floor((date.getTime() - firstDate.getTime()) / binSizeMilli) * binSizeMilli;
-    //if (binSize === 4) {console.log(date, firstDate, binSize, offset);}
     return new Date(firstDate.getTime() + offset);
 }
 
@@ -443,12 +482,13 @@ function plot(jsonp) {
 
     // Make separate crossfilters for sfl data and range plot to prevent them
     // from filtering each other.
-    var sflxf = crossfilter(data["sfl"]),
-        rangexf = crossfilter(data["range"]),
-        popxf = crossfilter(data["pop"]);
+    sflxf = crossfilter(data["sfl"]);
+    rangexf = crossfilter(data["range"]);
+    popxf = crossfilter(data["pop"]);
 
     var msIn3Min = 3 * 60 * 1000;
     timeDims[1] = sflxf.dimension(function(d) { return d.time; });
+    timeRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
     var first = timeDims[1].bottom(1)[0].time;
     timeDims[2] = sflxf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
     timeDims[3] = sflxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
@@ -467,13 +507,13 @@ function plot(jsonp) {
     rangeDims[3] = rangexf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
     rangeDims[4] = rangexf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
 
-    ["par"].forEach(function(key) {
-        groups[key] = {};
+    (function(key) {
+        groups.rangeChart = {};
         [1,2,3,4].forEach(function(binSize) {
-            groups[key][binSize] = rangeDims[binSize].group().reduce(
+            groups.rangeChart[binSize] = rangeDims[binSize].group().reduce(
                 reduceAdd(key), reduceRemove(key), reduceInitial);
         });
-    });
+    }("par"));
 
     timePopDims[1] = popxf.dimension(function(d) { return String(d.time.getTime()) + "_" + d.pop; });
     timePopDims[2] = popxf.dimension(function(d) { return String(roundDate(d.time, first, 2*msIn3Min).getTime()) + "_" + d.pop; });
@@ -498,7 +538,7 @@ function plot(jsonp) {
     plotSeriesChart("conc", "Abundance (10^6 cells/L)");
     plotSeriesChart("size", "Forward scatter (a.u.)");
 
-    plotRangeChart("par", "PAR (w/m2)");
+    plotRangeChart("PAR (w/m2)");
 
     var t3 = new Date().getTime();
 
@@ -523,10 +563,35 @@ function makePopButton(popName) {
 }
 
 function initialize() {
-    var query = 'SELECT *, (IsNull(prochloro_conc, 0) + IsNull(synecho_conc, 0) + IsNull(picoeuk_conc, 0) + IsNull(beads_conc, 0)) as total_conc ';
-    query += 'FROM [seaflow.viz@gmail.com].[seaflow all query] ';
-    query += 'ORDER BY [time] ASC';
+    var query = "SELECT *, (IsNull(prochloro_conc, 0) + IsNull(synecho_conc, 0) + IsNull(picoeuk_conc, 0) + IsNull(beads_conc, 0)) as total_conc ";
+    query += "FROM [seaflow.viz@gmail.com].[seaflow all query] ";
+    query += "WHERE [time] <= '12/12/2014 00:00:00 AM' ";
+    query += "ORDER BY [time] ASC";
     executeSqlQuery(query, plot);
+
+    updateInterval = setInterval(update, 15000);
+}
+
+function update() {
+    if (timeDims[1] !== undefined) {
+        var latestTime = timeDims[1].top(1)[0].time;
+        var tsqlFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S %p");
+        var query = "SELECT *, (IsNull(prochloro_conc, 0) + IsNull(synecho_conc, 0) + IsNull(picoeuk_conc, 0) + IsNull(beads_conc, 0)) as total_conc ";
+        query += "FROM [seaflow.viz@gmail.com].[seaflow all query] ";
+        query += "WHERE [time] > '" + tsqlFormat(latestTime) + "' ";
+        query += "ORDER BY [time] ASC";
+        clearInterval(updateInterval);
+        executeSqlQuery(query, function(jsonp) {
+            var data = transformData(jsonp);
+            sflxf.add(data.sfl);
+            popxf.add(data.pop);
+            rangexf.add(data.range);
+            updateCharts();
+            updateRangeChart();
+        });
+    }
 }
 
 initialize();
+update();
+
