@@ -1,3 +1,29 @@
+// .. the refresh time of the page
+var REFRESH_TIME_MILLIS = 3 * 60 * 1000;
+
+// .. the geo-coordinates of the Armbrust Lab
+var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
+// The ship tracks
+var recentShipTimestamp = new Date(0);
+var recentShipLocation = armbrustLab;
+// .. the marker for the ship
+var shipMarker = new google.maps.Marker({
+  clickable : false,
+  position : recentShipLocation,
+  zIndex : google.MAX_ZINDEX + 1,
+  icon : {
+    url : 'ships/rv_kilo_moana_alpha.png',
+    anchor : new google.maps.Point(40, 40),
+    scaledSize : new google.maps.Size(40, 40)
+  }
+});
+// The bounds of the known points in the map
+var mapBounds = new google.maps.LatLngBounds();
+// Whether the map has been zoomed yet
+var hasZoomed = false;
+// SQLShare REST server for queries
+var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
+
 var charts = {};
 // Short names for populations in database
 var popNames = ["prochloro", "synecho", "picoeuk", "beads"];
@@ -18,16 +44,171 @@ var timeRange = null;
 var sflxf;
 var rangexf;
 var popxf;
-var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S UTC");
+var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");
 var pinnedToMostRecent = false;  // should time selection be pinned to most recent data?
-var legendChartKey = "size";  // key for chart which contains pop legend
 
+// How to style data points
+var pointStyle = {
+    radius: 3,
+    fillOpacity: 0.65,
+    strokeOpacity: 1
+}
+
+// Track which populations should be shown in plots
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
 
+var infobox;
+
+// Put the ship icon at the most recent location
+function setupShipIcon(map) {
+    console.log("setting ship at recent " + recentShipLocation);
+    shipMarker.setMap(map);
+    shipMarker.setPosition(recentShipLocation);
+}
+
+function zoomMapToBounds(map) {
+    map.fitBounds(mapBounds);
+}
+
+// Get the ship tracks
+function initShipTracks(map) {
+  console.log('initializing ship tracks');
+  var query = 'WITH all_tracks AS (SELECT *, ROW_NUMBER() OVER (ORDER BY [time] ASC) AS row FROM [seaflow.viz@gmail.com].[SFL_VIEW]),\n';
+  query += 'track_stats AS (SELECT COUNT(*) as num_tracks, CASE WHEN COUNT(*) < 1000 THEN 1 ELSE convert(int, (COUNT(*)+999)/1000) END AS granularity FROM all_tracks)\n';
+  query += 'SELECT lat, lon\n';
+  query += 'FROM all_tracks, track_stats\n';
+  query += 'WHERE (num_tracks-row) % granularity = 0 AND (num_tracks - row) > 495\n';
+  query += 'ORDER BY [time] ASC';
+  $.ajax({
+    url : sqlshare_query_url + encodeURIComponent(query),
+    dataType : 'jsonp',
+    type : 'GET',
+    jsonp : 'jsonp',
+    crossDomain : 'true',
+    error : function(xhr, ts, et) {
+      alert("error errorThrow:" + et);
+    },
+    success : function(jsonp) {
+      tracks = jsonp['data'];
+      if (tracks.length == 0) {
+        console.log('no new track points');
+        return;
+      } else {
+        console.log(tracks.length + ' new track points');
+      }
+
+      /*** Create a circle for every point ***/
+      // .. the current point and timestamp
+      var curPoint;
+      var curTimestamp;
+      // .. common options for every circle
+      var circleOptions = {
+        icon : {
+          path : google.maps.SymbolPath.CIRCLE,
+          fillColor : '#FFFFFF',
+          fillOpacity : 0.5,
+          strokeOpacity : 0,
+          scale : 1.25,
+          clickable : true
+        }
+      };
+      // .. do the actual work
+      for ( var index in tracks) {
+        var curTrack = tracks[index];
+        curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
+        circleOptions.position = curPoint;
+        var circle = new google.maps.Marker(circleOptions);
+        circle.setMap(map);
+        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+
+        /* Update map bounds */
+        mapBounds.extend(curPoint);
+      }
+
+      addShipTracks(map);
+    }
+  });
+}
+
+// Get the ship tracks
+function addShipTracks(map) {
+  console.log('refreshing ship tracks since ' + recentShipTimestamp);
+  var query = 'SELECT * FROM (SELECT TOP 500 lat, lon, [time]\n';
+  query += 'FROM [seaflow.viz@gmail.com].[SFL_VIEW]\n';
+  query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
+  query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
+  $.ajax({
+    url : sqlshare_query_url + encodeURIComponent(query),
+    dataType : 'jsonp',
+    type : 'GET',
+    jsonp : 'jsonp',
+    crossDomain : 'true',
+    error : function(xhr, ts, et) {
+      alert("error errorThrow:" + et);
+    },
+    success : function(jsonp) {
+      tracks = jsonp['data'];
+      if (tracks.length == 0) {
+        console.log('no new track points');
+        return;
+      } else {
+        console.log(tracks.length + ' new track points');
+      }
+
+      /*** Create a circle for every point ***/
+      // .. the current point and timestamp
+      var curPoint;
+      var curTimestamp;
+      // .. common options for every circle
+      var circleOptions = {
+        icon : {
+          path : google.maps.SymbolPath.CIRCLE,
+          fillColor : '#FF0000',
+          fillOpacity : 1,
+          strokeOpacity : 0,
+          scale : 1.5,
+          clickable : true
+        }
+      };
+      // .. do the actual work
+      for ( var index in tracks) {
+        var curTrack = tracks[index];
+        curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
+        curTimestamp = curTrack[2];
+        circleOptions.position = curPoint;
+        var circle = new google.maps.Marker(circleOptions);
+        circle.setMap(map);
+        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+
+        /* Update map bounds */
+        mapBounds.extend(curPoint);
+      }
+
+      // Save the most recent point
+      console.log('timestamp = ' + curTimestamp);
+      recentShipLocation = curPoint;
+      recentShipTimestamp = new Date(curTimestamp);
+
+      setupShipIcon(map);
+
+      /* Re-zoom the map */
+      zoomMapToBounds(map);
+    }
+  });
+}
+
+// (ugly?) Workarounds for Javascript scoping. Otherwise it always uses the last-created `circle` object.
+function _makeMouseover(c) {
+  return function() {
+    infoBox.setContent('<div class="mapInfoWindow">' + c.getPosition().toUrlValue() + '</div>');
+    infoBox.setPosition(c.getPosition());
+    infoBox.open(c.getMap());
+  }
+}
+
 function executeSqlQuery(query, cb) {
     var t0 = new Date();
-    var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
     $.ajax({
         url : sqlshare_query_url + encodeURIComponent(query),
         dataType : 'jsonp',
@@ -38,7 +219,7 @@ function executeSqlQuery(query, cb) {
             alert("error errorThrow:" + et);
         },
         success : function(jsonp) {
-            //console.log("SQL query took " + (((new Date().getTime()) - t0.getTime())/1000) + " sec")
+            console.log("SQL query took " + (((new Date().getTime()) - t0.getTime())/1000) + " sec")
             cb(jsonp);
         }
     });
@@ -73,7 +254,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data.slice(0,460)) {
+    for (var i in jsonp.data.slice(0,1400)) {
         var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -85,7 +266,8 @@ function transformData(jsonp) {
                 time: new Date(prevTime.getTime() + (3 * msecMinute)),
                 salinity: null,
                 ocean_tmp: null,
-                par: null
+                par: null,
+                velocity: null
             });
             rangeValues.push({
                 time: new Date(prevTime.getTime() + (3 * msecMinute)),
@@ -105,7 +287,8 @@ function transformData(jsonp) {
             time: curTime,
             ocean_tmp: jsonp.data[i][idx["ocean_tmp"]],
             salinity: jsonp.data[i][idx["salinity"]],
-            par: jsonp.data[i][idx["par"]]
+            par: Math.max(jsonp.data[i][idx["par"]], 0),
+            velocity: jsonp.data[i][idx["velocity"]],
         });
         rangeValues.push({
             time: curTime,
@@ -174,29 +357,27 @@ function plotLineChart(key, yAxisLabel) {
     var minMaxY = d3.extent(group.all(), valueAccessor);
 
     chart
-        .width(768)
-        .height(100)
+        .width(480)
+        .height(120)
         .x(d3.time.scale.utc().domain(minMaxTime))
         .y(d3.scale.linear().domain(minMaxY))
         .brushOn(false)
         .clipPadding(10)
-        .renderDataPoints({
-            radius: 2,
-            fillOpacity: 0.8,
-            strokeOpacity: 0.8
-        })
+        .renderDataPoints(pointStyle)
         .yAxisLabel(yAxisLabel)
+        .xAxisLabel("Time (GMT)")
         .interpolate("cardinal")
         .dimension(dim)
         .group(group)
         .valueAccessor(valueAccessor)
         .defined(function(d) { return (d.y !== null); })  // don't plot segements with missing data
         .title(function(d) {
-            return labelFormat(d.key) + '\n' + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
+            return labelFormat(d.key) + '\n' + d3.format(".2f")(valueAccessor(d));
         });
-    chart.margins().bottom = 20;
     chart.margins().left = 60;
-    chart.yAxis().ticks(6);
+    chart.xAxis().ticks(6);
+    chart.yAxis().ticks(4);
+    chart.yAxis().tickFormat(d3.format(".2f"))
     chart.render();
 }
 
@@ -225,11 +406,14 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
     var legendHeight = 15;  // size of legend
 
     chart
-        .width(768)
-        .height(200)
+        .width(1000)
+        .height(300)
         .chart(dc.lineChart)
         .x(d3.time.scale.utc().domain(minMaxTime))
         .y(d3.scale.linear().domain(minMaxY))
+        .ordinalColors(["#FFBB78", "#FF7F0E", "#1F77B4", "#AEC7E8"])
+        .renderHorizontalGridLines(true)
+        .renderVerticalGridLines(true)
         .dimension(dim)
         .group(group)
         .seriesAccessor(seriesAccessor)
@@ -238,8 +422,9 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
         .brushOn(false)
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
+        .xAxisLabel("Time (GMT)")
         .title(function(d) {
-            return labelFormat(keyAccessor(d)) + "\n" + d3.format(".3n")(valueAccessor(d)) + "\n" + d.value.total + "\n" + d.value.count;
+            return labelFormat(keyAccessor(d)) + "\n" + d3.format(".2f")(valueAccessor(d));
         })
         .childOptions(
         {
@@ -248,36 +433,32 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
                 return (d.y !== null);
             },
             interpolate: "cardinal",
-            renderDataPoints: {
-                radius: 2,
-                fillOpacity: 0.8,
-                strokeOpacity: 0.8
-            }
+            renderDataPoints: pointStyle
         });
-    chart.margins().bottom = 20;
     chart.margins().left = 60;
     chart.yAxis().ticks(6);
+    chart.yAxis().tickFormat(d3.format(".2f"))
 
     // Legend setup
     if (legendFlag) {
+        chart.margins().top = legendHeight + 5;
         chart.legend(dc.legend()
-            .x(175)
-            .y(chart.height() - (2 * legendHeight) + Math.floor(legendHeight/2))
+            .x(600)
+            .y(0)
             .itemHeight(legendHeight)
             .gap(10)
             .horizontal(true)
             .autoItemWidth(true)
         );
-        chart.margins().bottom += 2 * legendHeight;  // room for legend
     } else {
         // adjust chart size so that plot area is same size as chart with legend
-        chart.height(chart.height() - 2 * legendHeight);
+        chart.height(chart.height() - legendHeight + 5);
     }
     
     chart.render();
 }
 
-function plotRangeChart(yAxisLabel) {
+function plotRangeChart(yAxisLabel, yAxisDomain) {
     var chart = dc.lineChart("#rangeChart");
     charts["rangeChart"] = chart;
 
@@ -288,13 +469,14 @@ function plotRangeChart(yAxisLabel) {
     var minMaxY = d3.extent(group.all(), valueAccessor);
 
     chart
-        .width(768)
-        .height(100)
+        .width(1000)
+        .height(120)
         .x(d3.time.scale.utc().domain(minMaxTime))
-        .y(d3.scale.linear().domain(minMaxY))
+        .y(d3.scale.linear().domain(yAxisDomain))
         .interpolate("cardinal")
         .clipPadding(10)
         .yAxisLabel(yAxisLabel)
+        //.xAxisLabel("Time (GMT)")
         .dimension(dim)
         .group(group)
         .valueAccessor(valueAccessor)
@@ -307,9 +489,8 @@ function plotRangeChart(yAxisLabel) {
             updateCharts();
         }, 400);
     });
-    chart.margins().bottom = 20;
     chart.margins().left = 60;
-    chart.yAxis().ticks(6);
+    chart.yAxis().ticks(4);
     chart.render();
 }
 
@@ -344,7 +525,7 @@ function updateCharts() {
     // Reset population filters
     popDim.filterAll();
     
-    ["ocean_tmp", "salinity", "par"].forEach(function(key) {
+    ["velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
         if (charts[key] !== undefined) {
             charts[key].dimension(timeDims[binSize]);
             charts[key].group(groups[key][binSize]);
@@ -370,7 +551,8 @@ function updateCharts() {
     filterPops();
 
     // Need to reconfigure onclick for legend buttons after render
-    configurePopButtons();
+    configureLegendButtons(charts["conc"]);
+    configureLegendButtons(charts["size"]);
 
     var t1 = new Date();
     //console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
@@ -518,7 +700,7 @@ function plot(jsonp) {
     timeDims[3] = sflxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
     timeDims[4] = sflxf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
 
-    ["ocean_tmp", "salinity", "par"].forEach(function(key) {
+    ["velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
         groups[key] = {};
         [1,2,3,4].forEach(function(binSize) {
             groups[key][binSize] = timeDims[binSize].group().reduce(
@@ -555,15 +737,17 @@ function plot(jsonp) {
 
     var t2 = new Date().getTime();
 
+    plotLineChart("velocity", "Speed (knots)");
     plotLineChart("ocean_tmp", "Temp (degC)");
     plotLineChart("salinity", "Salinity (psu)");
-    plotLineChart("par", "PAR (w/m2)");
+    //plotLineChart("par", "PAR (w/m2)");
 
-    plotSeriesChart("conc", "Abundance (10^6 cells/L)", legendChartKey === "conc");
-    plotSeriesChart("size", "Forward scatter (a.u.)", legendChartKey === "size");
-    configurePopButtons();
+    plotSeriesChart("conc", "Abundance (10^6 cells/L)", legend = true);
+    plotSeriesChart("size", "Forward scatter (a.u.)", legend = true);
+    configureLegendButtons(charts["conc"]);
+    configureLegendButtons(charts["size"]);
 
-    plotRangeChart("PAR (w/m2)");
+    plotRangeChart("PAR (w/m2)", [0.0, 0.30]);
 
     var t3 = new Date().getTime();
 
@@ -575,8 +759,7 @@ function plot(jsonp) {
 
 // Needs to be called after chart with population legend is rendered.
 // Rendering resets onclick handler for buttons.
-function configurePopButtons() {
-    var chart = charts[legendChartKey];
+function configureLegendButtons(chart) {
     var legendGroups = chart.selectAll("g.dc-legend-item");
     legendGroups[0].forEach(function(g) {
         var commonPopName = g.children[1].innerHTML;
@@ -605,38 +788,71 @@ function filterPops() {
     charts["conc"].render();
     charts["size"].render();
 
-    configurePopButtons();
+    // Reconfigure legend buttons after re-render
+    configureLegendButtons(charts["conc"]);
+    configureLegendButtons(charts["size"]);
 }
 
 function initialize() {
-    var query = "SELECT *, (IsNull(prochloro_conc, 0) + IsNull(synecho_conc, 0) + IsNull(picoeuk_conc, 0) + IsNull(beads_conc, 0)) as total_conc ";
-    query += "FROM [seaflow.viz@gmail.com].[seaflow all query] ";
+    // Create the map
+    var mapOptions = {
+        center : armbrustLab,
+        panControl : true,
+        streetViewControl : false,
+        zoomControl : true,
+        zoom : 8,
+        mapTypeId : google.maps.MapTypeId.SATELLITE
+    };
+    var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+
+    // Initialize ship tracks
+    initShipTracks(map);
+
+    // Refresh timer
+    setInterval(function() {
+        addShipTracks(map);
+    }, REFRESH_TIME_MILLIS);
+
+    var query = "SELECT * ";
+    query += "FROM [seaflow.viz@gmail.com].[SeaFlow All Data] ";
     query += "WHERE [time] <= '12/12/2014 00:00:00 AM' ";
     query += "ORDER BY [time] ASC";
     executeSqlQuery(query, plot);
 
-    //updateInterval = setInterval(update, 10000);
+    //updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
+    updateInterval = setInterval(update, 10000);
 }
 
 function update() {
     if (timeDims[1] !== undefined) {
         var latestTime = timeDims[1].top(1)[0].time;
         var tsqlFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S %p");
-        var query = "SELECT TOP(1) *, (IsNull(prochloro_conc, 0) + IsNull(synecho_conc, 0) + IsNull(picoeuk_conc, 0) + IsNull(beads_conc, 0)) as total_conc ";
-        query += "FROM [seaflow.viz@gmail.com].[seaflow all query] ";
+        var query = "SELECT TOP(1) * ";
+        query += "FROM [seaflow.viz@gmail.com].[SeaFlow All Data] ";
         query += "WHERE [time] > '" + tsqlFormat(latestTime) + "' ";
         query += "ORDER BY [time] ASC";
         //clearInterval(updateInterval);
         executeSqlQuery(query, function(jsonp) {
             var data = transformData(jsonp);
-            sflxf.add(data.sfl);
-            popxf.add(data.pop);
-            rangexf.add(data.range);
-            updateRangeChart();
-            updateCharts();
+            if (data.sfl.length) {
+                console.log("Added " + data.sfl.length + " data points");
+                sflxf.add(data.sfl);
+                popxf.add(data.pop);
+                rangexf.add(data.range);
+                updateRangeChart();
+                updateCharts();
+            }
         });
     }
 }
+
+
+infoBox = new InfoBox({
+  alignBottom : true,
+});
+
+$('.gridly').gridly({gutter:4, base:60, columns:16, draggable: false});
+//google.maps.event.addDomListener(window, 'load', initialize);
 
 initialize();
 update();

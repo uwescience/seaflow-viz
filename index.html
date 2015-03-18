@@ -3,413 +3,13 @@
 <head>
 <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
 <meta name="google" content="notranslate" />
-<link href="css/nv.d3.min.css" rel="stylesheet">
+<meta charset="UTF-8">
+<link href="css/dc.css" rel="stylesheet" type="text/css">
 <link href="css/seaflow.viz.css" rel="stylesheet">
 <script type="text/javascript"
 	src="https://maps.googleapis.com/maps/api/js?sensor=false">
-  
 </script>
-<script src="js/infobox_packed.1.1.12.js" type="text/javascript"></script>
-<script type="text/javascript">
-  // Useful global variables
-  // .. the refresh time of the page
-  var REFRESH_TIME_MILLIS = 60 * 1000;
-  // .. the geo-coordinates of the Armbrust Lab
-  var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
-  // The ship tracks
-  var recentShipTimestamp = new Date(0);
-  var recentShipLocation = armbrustLab;
-  // .. the marker for the ship
-  var shipMarker = new google.maps.Marker({
-    clickable : false,
-    position : recentShipLocation,
-    zIndex : google.MAX_ZINDEX + 1,
-    icon : {
-      url : 'ships/rv_kilo_moana_alpha.png',
-      anchor : new google.maps.Point(40, 40),
-      scaledSize : new google.maps.Size(40, 40)
-    }
-  });
-  // The bounds of the known points in the map
-  var mapBounds = new google.maps.LatLngBounds();
-  // Whether the map has been zoomed yet
-  var hasZoomed = false;
-  // SQLShare REST server for queries
-  var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
-  // The log buffer
-  var logbuffer = '';
 
-  // Put the ship icon at the most recent location
-  function setupShipIcon(map) {
-    console.log("setting ship at recent " + recentShipLocation);
-    shipMarker.setMap(map);
-    shipMarker.setPosition(recentShipLocation);
-  }
-
-  function zoomMapToBounds(map) {
-    map.fitBounds(mapBounds);
-  }
-
-  var infoBox = new InfoBox({
-    alignBottom : true,
-  });
-  // (ugly?) Workarounds for Javascript scoping. Otherwise it always uses the last-created `circle` object.
-  function _makeMouseover(c) {
-    return function() {
-      infoBox.setContent('<div class="mapInfoWindow">' + c.getPosition().toUrlValue() + '</div>');
-      infoBox.setPosition(c.getPosition());
-      infoBox.open(c.getMap());
-    }
-  }
-
-  // Get the ship tracks
-  function initShipTracks(map) {
-    console.log('initializing ship tracks');
-    var query = 'WITH all_tracks AS (SELECT *, ROW_NUMBER() OVER (ORDER BY [time] ASC) AS row FROM [seaflow.viz@gmail.com].[SFL_VIEW]),\n';
-    query += 'track_stats AS (SELECT COUNT(*) as num_tracks, CASE WHEN COUNT(*) < 1000 THEN 1 ELSE convert(int, (COUNT(*)+999)/1000) END AS granularity FROM all_tracks)\n';
-    query += 'SELECT lat, lon\n';
-    query += 'FROM all_tracks, track_stats\n';
-    query += 'WHERE (num_tracks-row) % granularity = 0 AND (num_tracks - row) > 495\n';
-    query += 'ORDER BY [time] ASC';
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        tracks = jsonp['data'];
-        if (tracks.length == 0) {
-          console.log('no new track points');
-          return;
-        } else {
-          console.log(tracks.length + ' new track points');
-        }
-
-        /*** Create a circle for every point ***/
-        // .. the current point and timestamp
-        var curPoint;
-        var curTimestamp;
-        // .. common options for every circle
-        var circleOptions = {
-          icon : {
-            path : google.maps.SymbolPath.CIRCLE,
-            fillColor : '#FFFFFF',
-            fillOpacity : 0.5,
-            strokeOpacity : 0,
-            scale : 1.25,
-            clickable : true
-          }
-        };
-        // .. do the actual work
-        for ( var index in tracks) {
-          var curTrack = tracks[index];
-          curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
-          circleOptions.position = curPoint;
-          var circle = new google.maps.Marker(circleOptions);
-          circle.setMap(map);
-          google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
-
-          /* Update map bounds */
-          mapBounds.extend(curPoint);
-        }
-
-        addShipTracks(map);
-      }});
-  }
-  
-  // Get the ship tracks
-  function addShipTracks(map) {
-    console.log('refreshing ship tracks since ' + recentShipTimestamp);
-    var query = 'SELECT * FROM (SELECT TOP 500 lat, lon, [time]\n';
-    query += 'FROM [seaflow.viz@gmail.com].[SFL_VIEW]\n';
-    query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
-    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        tracks = jsonp['data'];
-        if (tracks.length == 0) {
-          console.log('no new track points');
-          return;
-        } else {
-          console.log(tracks.length + ' new track points');
-        }
-
-        /*** Create a circle for every point ***/
-        // .. the current point and timestamp
-        var curPoint;
-        var curTimestamp;
-        // .. common options for every circle
-        var circleOptions = {
-          icon : {
-            path : google.maps.SymbolPath.CIRCLE,
-            fillColor : '#FF0000',
-            fillOpacity : 1,
-            strokeOpacity : 0,
-            scale : 1.5,
-            clickable : true
-          }
-        };
-        // .. do the actual work
-        for ( var index in tracks) {
-          var curTrack = tracks[index];
-          curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
-          curTimestamp = curTrack[2];
-          circleOptions.position = curPoint;
-          var circle = new google.maps.Marker(circleOptions);
-          circle.setMap(map);
-          google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
-
-          /* Update map bounds */
-          mapBounds.extend(curPoint);
-        }
-
-        // Save the most recent point
-        console.log('timestamp = ' + curTimestamp);
-        recentShipLocation = curPoint;
-        recentShipTimestamp = new Date(curTimestamp);
-
-        setupShipIcon(map);
-
-        /* Re-zoom the map */
-        zoomMapToBounds(map);
-      }
-    });
-  }
-
-  function initialize() {
-    // Create the map
-    var mapOptions = {
-      center : armbrustLab,
-      panControl : true,
-      streetViewControl : false,
-      zoomControl : true,
-      zoom : 8,
-      mapTypeId : google.maps.MapTypeId.SATELLITE
-    };
-    var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
-
-    // Initialize ship tracks
-    initShipTracks(map);
-
-    // Refresh timer
-    setInterval(function() {
-      addShipTracks(map);
-    }, REFRESH_TIME_MILLIS);
-
-	makeDataPlots();
-  }
-</script>
-<script type="text/javascript" src="js/jquery.min.js"></script>
-<script type="text/javascript" src="js/jquery.gridly.js"></script>
-<script type="text/javascript" src="js/d3.min.js"></script>
-<script type="text/javascript" src="js/nv.d3.min.js"></script>
-<script type="text/javascript">
-  var charts = {};
-  function plotSqlData(data, svgName, optionalXLabel, optionalYLabel) {
-    // Step 1: convert the data over to nvd3's format
-    // .. Ensure that there are exactly 2 columns, X and Y
-    if (data.header.length < 2) {
-      alert('Query ' + data.sql + ' returned ' + data.header.length + ' columns, needs at least 2');
-      return;
-    }
-    // The datum for the scatter plot
-    var datum = new Array(data.header.length - 1);
-    for (var col = 0; col < data.header.length - 1; ++col) {
-      datum[col] = {
-        values : [],
-        key : data.header[col + 1]
-      };
-    }
-    // Construct the (x,y) tuples
-    for ( var i in data.data) {
-      xval = data.data[i][0];
-      if (data.type[0] == 'datetime') {
-        xval = new Date(xval).getTime();
-      }
-      for (var col = 0; col < data.header.length - 1; ++col) {
-        yval = data.data[i][col + 1];
-        datum[col].values.push({
-          x : xval,
-          y : yval
-        });
-      }
-    }
-    // X and Y labels
-    var xLabel = optionalXLabel;
-    var yLabel = optionalYLabel;
-    // For multiple columns, set the label to the common prefix
-    if (!yLabel && data.header.length == 2) {
-      yLabel = data.header[1];
-    }
-    // X tick formatting
-    var xFormat = d3.format('.02f');
-    if (data.type[0] == 'datetime') {
-      xFormat = function(d) {
-        return d3.time.format('%H:%M')(new Date(d));
-      }
-    }
-
-    nv.addGraph(function() {
-      var chart = nv.models.scatterChart();
-      charts[svgName] = chart;
-      chart.xAxis.axisLabel(xLabel).tickFormat(xFormat);
-      chart.yAxis.axisLabel(yLabel).tickFormat(d3.format('.02f'));
-
-      if (datum.length == 1) {
-        chart.showLegend(false);
-      }
-
-      d3.select(svgName).datum(datum).call(chart);
-
-      /*
-      // So it auto-resizes
-          nv.utils.windowResize(function() {
-            d3.select(svgName).call(chart)
-          });
-       */
-      return chart;
-    });
-  }
-  function plotSqlQuery(query, svgId, optionalXLabel, optionalYLabel) {
-    var sqlshare_query_url = 'https://rest.sqlshare.escience.washington.edu/REST.svc/execute?sql=';
-    console.log("in plotSqlQuery");
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        console.log("Error");
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        console.log("success in query");
-        console.log(jsonp);
-        plotSqlData(jsonp, svgId, optionalXLabel, optionalYLabel);
-      }
-    });
-  }
-
-  function getPopConc() {
-    var query = 'SELECT * FROM (SELECT TOP 500 * ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise concentrations] ';
-    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-    plotSqlQuery(query, '#pop-conc-svg', 'Time (GMT)', 'Abundance (10^6 cells/L)');
-    var query = 'SELECT * FROM (SELECT TOP 500 * ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: population-wise size (fsc_small)] ';
-    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-    plotSqlQuery(query, '#pop-size-svg', 'Time (GMT)', 'Forward scatter (a.u.)');
-  }
-
-
-  /*function getTempSal() {
-    var query = 'SELECT salinity,ocean_tmp  FROM (SELECT TOP 500 * ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: salinity vs ocean temperature] ';
-    query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-    plotSqlQuery(query, '#sal-tmp-svg','Salinity (psu)','Temperature (degC)');
-  }*/
-
-  function getTempSal() {
-    console.log("in getTempSal");
-    var query = 'SELECT * ';
-    query += 'FROM [seaflow.viz@gmail.com].[seaflow all query] ';
-    query += 'ORDER BY [time] ASC';
-    /*var query = 'SELECT * FROM (SELECT TOP 500 * ';
-    query += 'FROM [seaflow.viz@gmail.com].[seaflow all query] ';
-    query += 'ORDER BY [time] ASC)';*/
-    plotSqlQuery(query, '#sal-tmp-svg','Salinity (psu)','Temperature (degC)');
-  }
-
-  function getTEMP() {
-    var query = 'SELECT * ';
-    query += 'FROM [seaflow.viz@gmail.com].[seaflow: Temp vs time] ';
-    query += 'ORDER BY [time] ASC';
-    plotSqlQuery(query, '#temp-svg','Time (GMT)', 'Temp (degC)');
-  }
-
-  function getSAL() {
-    var query = 'SELECT * ';
-    query += 'FROM [seaflow.viz@gmail.com].[seaflow: Salinity vs time] ';
-    query += 'ORDER BY [time] ASC';
-    plotSqlQuery(query, '#sal-svg','Time (GMT)', 'Salinity (psu)');
-  }
-
-  function getPAR() {
-    var query = 'SELECT * ';
-    query += 'FROM [seaflow.viz@gmail.com].[seaflow: PAR vs time] ';
-    query += 'ORDER BY [time] ASC';
-    plotSqlQuery(query, '#par-svg','Time (GMT)', 'PAR (w/m2)');
-  }
-
-  function getVelocity() {
-    var query = 'SELECT DateTime,  [Velocity (knots)] FROM (SELECT TOP 500 * ';
-    query += 'FROM [seaflow.viz@gmail.com].[SeaFlow: velocity] ';
-    query += 'WHERE [Velocity (knots)] IS NOT NULL ';
-    query += 'ORDER BY [DateTime] DESC) x ORDER BY [DateTime] ASC';
-    plotSqlQuery(query, '#velo-svg', 'Time (GMT)','Ship speed (knots)');
-  }
-
-  function makeDataPlots() {
-      //getPAR();
-      //getTEMP();
-      //getSAL();
-      updateLastTimes();
-      //getVelocity();
-      getTempSal();
-      //getPopConc();
-    }
-
-  //makeDataPlots();
-  setInterval(makeDataPlots, REFRESH_TIME_MILLIS);
-
-  function updateLastTimes() {
-    var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[stats_view]';
-    $.ajax({
-      url : sqlshare_query_url + encodeURIComponent(query),
-      dataType : 'jsonp',
-      type : 'GET',
-      jsonp : 'jsonp',
-      crossDomain : 'true',
-      error : function(xhr, ts, et) {
-        alert("error errorThrow:" + et);
-      },
-      success : function(jsonp) {
-        elapsed = jsonp['data'];
-        console.log(elapsed[0][0] + " minutes delay with ship data.");
-        $("#stats_time").text(elapsed[0][0] + " minutes delay with ship data.");
-      }
-    });
-    // var query = 'SELECT DATEDIFF(minute, MAX([Time]), GETDATE()) AS Lag FROM [seaflow.viz@gmail.com].[sfl_view]';
-    //$.ajax({
-    //  url : sqlshare_query_url + encodeURIComponent(query),
-    //  dataType : 'jsonp',
-    //  type : 'GET',
-    //  jsonp : 'jsonp',
-    //  crossDomain : 'true',
-    //  error : function(xhr, ts, et) {
-    //   alert("error errorThrow:" + et);
-    //  },
-    //  success : function(jsonp) {
-    //    elapsed = jsonp['data'];
-    //    console.log(elapsed[0][0] + " minutes since last sfl entry.");
-    //    $("#sfl_time").text(elapsed[0][0] + " minutes since last sfl entry.");
-    //  }
-    // });
-  }
-</script>
 </head>
 <body>
 	<div id="topleft">
@@ -418,7 +18,7 @@
             <a href="http://nsf.gov/" target="_blank"><img src="logos/nsf.png" height="50"></a>
             <a href="http://research.microsoft.com" target="_blank"><img src="logos/msr.png" height="50"></a>
             <a href="http://www.moore.org/" target="_blank"><img src="logos/moore.png" height="50"></a>
-            <a href="http://www.moore.org/" target="_blank"><img src="logos/simons.png" height="50"></a>
+            <a href="https://www.simonsfoundation.org//" target="_blank"><img src="logos/simons.png" height="50"></a>
 	<!-- </div>
 	<div id="topright">
 		<a href="https://sqlshare.escience.washington.edu/" target="_blank"><img
@@ -449,36 +49,34 @@
 					href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
 			</p> -->
 		</div>
-            <div id="map-canvas" class="gmap"></div>
-            <div class="time" data-svg="sal-temp-svg"><div class="svgwrap"><svg id="sal-temp-svg"/></div></div>
-            <div class="time" data-svg="velo-svg"><div class="svgwrap"><svg id="velo-svg"/></div></div>
-            <div class="time" data-svg="temp-svg"><div class="svgwrap"><svg id="temp-svg"/></div></div>
-            <div class="time" data-svg="sal-svg"><div class="svgwrap"><svg id="sal-svg"/></div></div>
-            <div class="time" data-svg="par-svg"><div class="svgwrap"><svg id="par-svg"/></div></div>
-            <div class='caption'>Abundances (top panel) and Forward scatter (bottom panel), a proxy of cell size, of <i>Prochlorococcus</i> (prochloro)
-                , <i>Synechococcus</i> (synecho), picoeukayotes (picoeuk), and reference calibration beads over time. 
-                Clic on the name of the population to unselect it. </div>
-              <div class="pop"><div class="svgwrap"><svg id="pop-conc-svg"/></div></div>
-  		  <div class="pop"><div class="svgwrap"><svg id="pop-size-svg"/></div></div>
-
-      </div>
-<script>
-  $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: false});
-  google.maps.event.addDomListener(window, 'load', initialize);
+    <div class="range-title"><strong>Select a time range</strong></div>
+    <div class="range" id='rangeChart'>
+      <a class='reset' href='javascript:charts["rangeChart"].filterAll();dc.redrawAll();' style='display: none;'>reset</a><br />
+    </div>
+    <div class="spacer"></div>
+    <div class="gmap" id="map-canvas"></div>
+    <div class="time" id="velocity"></div>
+    <div class="time" id="ocean_tmp"></div>
+    <div class="time" id="salinity"></div>
+    <!--<div class="time" id="par"></div>-->
+    
+      
+    
+    <div class='caption'>Abundances (top panel) and Forward scatter (bottom panel), a proxy of cell size, of <i>Prochlorococcus</i> (prochloro)
+        , <i>Synechococcus</i> (synecho), picoeukayotes (picoeuk), and reference calibration beads over time. 
+        Click on the name of the population to unselect it.
+    </div>
+    <div class="pop" id="conc"></div>
+    <div class="pop" id="size"></div>
+  </div>
   
-  $(document).on("click", ".gridly .square", function(event) {
-    var $this, size;
-    event.preventDefault();
-    event.stopPropagation();
-    $this = $(this);
-    $this.toggleClass('small');
-    $this.toggleClass('large');
-
-    var svg_name = $this.attr('data-svg');
-    charts['#' + svg_name].update();
-    var ret = $('.gridly').gridly('layout');
-    document.getElementById(svg_name).scrollIntoView();
-    return ret;
-  });
-</script></body>
+  
+  <script src="js/infobox_packed.1.1.12.js" type="text/javascript"></script>
+  <script type="text/javascript" src="js/d3.min.js" type="text/javascript"></script>
+  <script type="text/javascript" src="js/jquery.min.js" type="text/javascript"></script>
+  <script type="text/javascript" src="js/jquery.gridly.js" type="text/javascript"></script>
+  <script type="text/javascript" src="js/crossfilter.min.js" type="text/javascript"></script>
+  <script type="text/javascript" src="js/dc.min.js" type="text/javascript"></script>
+  <script type="text/javascript" src="js/dcplot.js" type="text/javascript"></script>
+</body>
 </html>
