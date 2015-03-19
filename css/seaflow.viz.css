@@ -134,6 +134,11 @@ body {
 	margin-top:10px;
 }
 
+.spacer {
+	width: 1000px;
+	height: 10px;
+}
+
 .dc-chart .grid-line line {
 	opacity: .75;
 	stroke: #aaa;

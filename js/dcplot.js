@@ -47,13 +47,6 @@ var popxf;
 var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");
 var pinnedToMostRecent = false;  // should time selection be pinned to most recent data?
 
-// How to style data points
-var pointStyle = {
-    radius: 3,
-    fillOpacity: 0.65,
-    strokeOpacity: 1
-}
-
 // Track which populations should be shown in plots
 var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
@@ -254,7 +247,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data.slice(0,1400)) {
+    for (var i in jsonp.data.slice(0,2)) {
         var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -363,7 +356,11 @@ function plotLineChart(key, yAxisLabel) {
         .y(d3.scale.linear().domain(minMaxY))
         .brushOn(false)
         .clipPadding(10)
-        .renderDataPoints(pointStyle)
+        .renderDataPoints({
+            radius: 3,
+            fillOpacity: 0.65,
+            strokeOpacity: 1
+        })
         .yAxisLabel(yAxisLabel)
         .xAxisLabel("Time (GMT)")
         .interpolate("cardinal")
@@ -433,7 +430,11 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
                 return (d.y !== null);
             },
             interpolate: "cardinal",
-            renderDataPoints: pointStyle
+            renderDataPoints: {
+                radius: 3,
+                fillOpacity: 0.65,
+                strokeOpacity: 1
+            }
         });
     chart.margins().left = 60;
     chart.yAxis().ticks(6);
@@ -749,6 +750,19 @@ function plot(jsonp) {
 
     plotRangeChart("PAR (w/m2)", [0.0, 0.30]);
 
+    // Select the last day by default. If there is less than a day of data
+    // select all data.
+    timeRangeSizeMilli = timeRange[1].getTime() - timeRange[0].getTime();
+    if (timeRangeSizeMilli < 1000 * 60 * 60 * 24) {
+        charts.rangeChart.filter(timeRange);
+    } else {
+        charts.rangeChart.filter([new Date(timeRange[1].getTime() - 1000 * 60 * 60 * 24), timeRange[1]]);
+    }
+    updateRangeChart();
+
+    //updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
+    updateInterval = setInterval(update, 10000);
+
     var t3 = new Date().getTime();
 
     /*console.log("transform time = " + ((t1 - t0) / 1000));
@@ -818,9 +832,6 @@ function initialize() {
     query += "WHERE [time] <= '12/12/2014 00:00:00 AM' ";
     query += "ORDER BY [time] ASC";
     executeSqlQuery(query, plot);
-
-    //updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
-    updateInterval = setInterval(update, 10000);
 }
 
 function update() {
