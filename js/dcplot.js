@@ -1,5 +1,6 @@
 // .. the refresh time of the page
 var REFRESH_TIME_MILLIS = 3 * 60 * 1000;
+//var REFRESH_TIME_MILLIS = 5000;
 
 // .. the geo-coordinates of the Armbrust Lab
 var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
@@ -17,6 +18,8 @@ var shipMarker = new google.maps.Marker({
     scaledSize : new google.maps.Size(40, 40)
   }
 });
+// Map historical ship location markers
+var circles = [];
 // The bounds of the known points in the map
 var mapBounds = new google.maps.LatLngBounds();
 // Whether the map has been zoomed yet
@@ -44,7 +47,8 @@ var timeRange = null;
 var sflxf;
 var rangexf;
 var popxf;
-var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");
+var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");  // format for chart point label time
+var timeFormat = d3.time.format.utc("%m/%d/%Y %H:%M:%S %p");    // parse UTC Date for SQLShare time field
 var pinnedToMostRecent = false;  // should time selection be pinned to most recent data?
 
 // Track which populations should be shown in plots
@@ -69,7 +73,7 @@ function initShipTracks(map) {
   console.log('initializing ship tracks');
   var query = 'WITH all_tracks AS (SELECT *, ROW_NUMBER() OVER (ORDER BY [time] ASC) AS row FROM [seaflow.viz@gmail.com].[SFL_VIEW]),\n';
   query += 'track_stats AS (SELECT COUNT(*) as num_tracks, CASE WHEN COUNT(*) < 1000 THEN 1 ELSE convert(int, (COUNT(*)+999)/1000) END AS granularity FROM all_tracks)\n';
-  query += 'SELECT lat, lon\n';
+  query += 'SELECT lat, lon, [time]\n';
   query += 'FROM all_tracks, track_stats\n';
   query += 'WHERE (num_tracks-row) % granularity = 0 AND (num_tracks - row) > 495\n';
   query += 'ORDER BY [time] ASC';
@@ -83,7 +87,7 @@ function initShipTracks(map) {
       alert("error errorThrow:" + et);
     },
     success : function(jsonp) {
-      tracks = jsonp['data'];
+      var tracks = jsonp['data'];
       if (tracks.length == 0) {
         console.log('no new track points');
         return;
@@ -110,10 +114,13 @@ function initShipTracks(map) {
       for ( var index in tracks) {
         var curTrack = tracks[index];
         curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
+        curTimestamp = curTrack[2];
         circleOptions.position = curPoint;
         var circle = new google.maps.Marker(circleOptions);
         circle.setMap(map);
-        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+        //google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+        circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
+
 
         /* Update map bounds */
         mapBounds.extend(curPoint);
@@ -141,7 +148,7 @@ function addShipTracks(map) {
       alert("error errorThrow:" + et);
     },
     success : function(jsonp) {
-      tracks = jsonp['data'];
+      var tracks = jsonp['data'];
       if (tracks.length == 0) {
         console.log('no new track points');
         return;
@@ -172,7 +179,8 @@ function addShipTracks(map) {
         circleOptions.position = curPoint;
         var circle = new google.maps.Marker(circleOptions);
         circle.setMap(map);
-        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+        //google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+        circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
 
         /* Update map bounds */
         mapBounds.extend(curPoint);
@@ -232,9 +240,6 @@ function transformData(jsonp) {
         return;
     }
 
-    // Parse format returned from SQLShare as UTC
-    var timeFormat = d3.time.format.utc("%m/%d/%Y %H:%M:%S %p");
-
     // Figure out which columns correspond to which column headers
     idx = {};
     for (var col = 0; col < jsonp.header.length; col++) {
@@ -247,7 +252,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data.slice(0,2)) {
+    for (var i in jsonp.data.slice(0,1000)) {
         var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -488,7 +493,8 @@ function plotRangeChart(yAxisLabel, yAxisDomain) {
                 console.log("focus range set to " + filter.map(d3.time.format.utc("%Y-%m-%d %H:%M:%S %p")).join(" - "));
             }
             updateCharts();
-        }, 400);
+            updateMapColors();
+        }, 600);
     });
     chart.margins().left = 60;
     chart.yAxis().ticks(4);
@@ -533,6 +539,8 @@ function updateCharts() {
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
             recalculateY(charts[key]);
+            // clear DOM nodes to prevent memory leaks before render
+            charts[key].resetSvg();
             charts[key].render();
         }
     });
@@ -543,10 +551,12 @@ function updateCharts() {
             charts[key].group(groups[key][binSize]);
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
-            recalculateY(charts[key]);
 
             // no need if filterPops is run right after. It will render too
+            //recalculateY(charts[key]);
             //charts[key].render();
+            // clear DOM nodes to prevent memory leaks before render
+            //charts[key].resetSvg();
         }
     });
     filterPops();
@@ -599,11 +609,39 @@ function updateRangeChart() {
         if (filter !== null) {
             charts.rangeChart.brush().extent(filter);
         }
+        // clear DOM nodes to prevent memory leaks before render
+        charts.rangeChart.resetSvg();
         charts.rangeChart.render();
     }
 
     var t1 = new Date();
     //console.log("range chart update took " + (t1.getTime() - t0.getTime()) / 1000);
+}
+
+function updateMapColors() {
+    return;
+    var circleOptions = {
+        icon : {
+            path : google.maps.SymbolPath.CIRCLE,
+            fillColor : '#FFFFFF',
+            fillOpacity : 0.5,
+            strokeOpacity : 0,
+            scale : 1.25,
+            clickable : true
+        }
+    };
+    circles.forEach(function(c) {
+        if (c.time.getTime() >= timeRange[0].getTime() &&
+            c.time.getTime() <= timeRange[1].getTime()) {
+            circleOptions.icon.fillColor = "#FF0000";
+            circleOptions.position = c.marker.getPosition();
+            c.marker.setOptions(circleOptions);
+        } else {
+            circleOptions.icon.fillColor = "#FFFFFF";
+            circleOptions.position = c.marker.getPosition();
+            c.marker.setOptions(circleOptions);
+        }
+    });
 }
 
 function valueAccessor(d) {
@@ -760,8 +798,7 @@ function plot(jsonp) {
     }
     updateRangeChart();
 
-    //updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
-    updateInterval = setInterval(update, 10000);
+    updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
 
     var t3 = new Date().getTime();
 
@@ -797,6 +834,8 @@ function filterPops() {
     // Recalculate Y domain
     recalculateY(charts["conc"]);
     recalculateY(charts["size"]);
+    charts["conc"].resetSvg();
+    charts["size"].resetSvg();
 
     // Have to render and redraw to get Y Axis scaling drawn properly
     charts["conc"].render();
@@ -847,11 +886,14 @@ function update() {
             var data = transformData(jsonp);
             if (data.sfl.length) {
                 console.log("Added " + data.sfl.length + " data points");
+                //++ucount;
+                //console.log(ucount * 3);
                 sflxf.add(data.sfl);
                 popxf.add(data.pop);
                 rangexf.add(data.range);
                 updateRangeChart();
                 updateCharts();
+                updateMapColors();
             }
         });
     }
@@ -863,8 +905,8 @@ infoBox = new InfoBox({
 });
 
 $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: false});
-//google.maps.event.addDomListener(window, 'load', initialize);
+google.maps.event.addDomListener(window, 'load', initialize);
 
-initialize();
-update();
+//var ucount = 0;
 
+//initialize();
