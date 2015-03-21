@@ -1,6 +1,6 @@
 // .. the refresh time of the page
 var REFRESH_TIME_MILLIS = 3 * 60 * 1000;
-//var REFRESH_TIME_MILLIS = 5000;
+//var REFRESH_TIME_MILLIS = 15000;
 
 // .. the geo-coordinates of the Armbrust Lab
 var armbrustLab = new google.maps.LatLng(47.6552966, -122.3214622);
@@ -118,8 +118,8 @@ function initShipTracks(map) {
         circleOptions.position = curPoint;
         var circle = new google.maps.Marker(circleOptions);
         circle.setMap(map);
-        //google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
-        circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
+        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+        //circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
 
 
         /* Update map bounds */
@@ -179,8 +179,8 @@ function addShipTracks(map) {
         circleOptions.position = curPoint;
         var circle = new google.maps.Marker(circleOptions);
         circle.setMap(map);
-        //google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
-        circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
+        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
+        //circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
 
         /* Update map bounds */
         mapBounds.extend(curPoint);
@@ -252,7 +252,7 @@ function transformData(jsonp) {
 
     var msecMinute = 60 * 1000;
     var prevTime = null;
-    for (var i in jsonp.data.slice(0,1000)) {
+    for (var i in jsonp.data) {
         var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
 
         // If this record is more than 4 minutes from last record, assume
@@ -505,7 +505,7 @@ function updateCharts() {
     var t0 = new Date();
 
     // No time window selected, reset timeRange to entire cruise
-    if (charts.rangeChart.filter() === null) {
+    if (! charts.rangeChart || charts.rangeChart.filter() === null) {
         timeRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
     } else {
         // If a time window is selected and it extends to the latest time point
@@ -529,11 +529,9 @@ function updateCharts() {
         timeDims[binSize].filterAll();
         timePopDims[binSize].filterAll();
     });
-    // Reset population filters
-    popDim.filterAll();
-    
+
     ["velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
-        if (charts[key] !== undefined) {
+        if (charts[key]) {
             charts[key].dimension(timeDims[binSize]);
             charts[key].group(groups[key][binSize]);
             charts[key].expireCache();
@@ -546,24 +544,20 @@ function updateCharts() {
     });
 
     ["conc", "size"].forEach(function(key) {
-        if (charts[key] !== undefined) {
+        if (charts[key]) {
             charts[key].dimension(timePopDims[binSize]);
             charts[key].group(groups[key][binSize]);
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
-
-            // no need if filterPops is run right after. It will render too
-            //recalculateY(charts[key]);
-            //charts[key].render();
+            recalculateY(charts[key]);
             // clear DOM nodes to prevent memory leaks before render
-            //charts[key].resetSvg();
+            var s = charts[key].svg();
+            charts[key].resetSvg();
+
+            charts[key].render();
+            configureLegendButtons(charts[key]);
         }
     });
-    filterPops();
-
-    // Need to reconfigure onclick for legend buttons after render
-    configureLegendButtons(charts["conc"]);
-    configureLegendButtons(charts["size"]);
 
     var t1 = new Date();
     //console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
@@ -655,6 +649,9 @@ function valueAccessor(d) {
 // Recalculate y range for values in filterRange.  Must re-render/redraw to
 // update plot.
 function recalculateY(chart) {
+    if (! chart) {
+        return;
+    }
     if (chart.children !== undefined) {
         // Population series plot
         // key for dimension is [time, pop]
@@ -722,6 +719,7 @@ function plot(jsonp) {
     var t0 = new Date().getTime();
 
     var data = transformData(jsonp);
+    //console.log(jsonp, data);
 
     var t1 = new Date().getTime();
 
@@ -779,7 +777,6 @@ function plot(jsonp) {
     plotLineChart("velocity", "Speed (knots)");
     plotLineChart("ocean_tmp", "Temp (degC)");
     plotLineChart("salinity", "Salinity (psu)");
-    //plotLineChart("par", "PAR (w/m2)");
 
     plotSeriesChart("conc", "Abundance (10^6 cells/L)", legend = true);
     plotSeriesChart("size", "Forward scatter (a.u.)", legend = true);
@@ -800,6 +797,8 @@ function plot(jsonp) {
 
     updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
 
+    updateLagText();
+
     var t3 = new Date().getTime();
 
     /*console.log("transform time = " + ((t1 - t0) / 1000));
@@ -811,14 +810,30 @@ function plot(jsonp) {
 // Needs to be called after chart with population legend is rendered.
 // Rendering resets onclick handler for buttons.
 function configureLegendButtons(chart) {
+    if (! chart) {
+        return;
+    }
     var legendGroups = chart.selectAll("g.dc-legend-item");
     legendGroups[0].forEach(function(g) {
-        var commonPopName = g.children[1].innerHTML;
+        var commonPopName = g.childNodes[1].firstChild.data;
         var popName = popLookup[commonPopName];
         g.onclick = function() {
             // Show / Hide population specific data
             popFlags[popName] = !popFlags[popName];
             filterPops();
+            // Recalculate Y domain, reset onclick
+            if (charts["conc"]) {
+                recalculateY(charts["conc"]);
+                charts["conc"].resetSvg();
+                charts["conc"].render();
+                configureLegendButtons(charts["conc"]);
+            }
+            if (charts["size"]) {
+                recalculateY(charts["size"]);
+                charts["size"].resetSvg();
+                charts["size"].render();
+                configureLegendButtons(charts["size"]);
+            }
         };
     });
 }
@@ -830,20 +845,11 @@ function filterPops() {
             return popFlags[d];
         });
     }
+}
 
-    // Recalculate Y domain
-    recalculateY(charts["conc"]);
-    recalculateY(charts["size"]);
-    charts["conc"].resetSvg();
-    charts["size"].resetSvg();
-
-    // Have to render and redraw to get Y Axis scaling drawn properly
-    charts["conc"].render();
-    charts["size"].render();
-
-    // Reconfigure legend buttons after re-render
-    configureLegendButtons(charts["conc"]);
-    configureLegendButtons(charts["size"]);
+function updateLagText() {
+    var lagMilli = new Date().getTime() - timeDims[1].top(1)[0].time.getTime();
+    $("#update-lag").text(d3.format(".2f")(lagMilli / 1000 / 60) + " minutes since cruise contact");
 }
 
 function initialize() {
@@ -868,32 +874,30 @@ function initialize() {
 
     var query = "SELECT * ";
     query += "FROM [seaflow.viz@gmail.com].[SeaFlow All Data] ";
-    query += "WHERE [time] <= '12/12/2014 00:00:00 AM' ";
     query += "ORDER BY [time] ASC";
     executeSqlQuery(query, plot);
 }
 
 function update() {
     if (timeDims[1] !== undefined) {
+
         var latestTime = timeDims[1].top(1)[0].time;
         var tsqlFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S %p");
-        var query = "SELECT TOP(1) * ";
+        var query = "SELECT * ";
         query += "FROM [seaflow.viz@gmail.com].[SeaFlow All Data] ";
         query += "WHERE [time] > '" + tsqlFormat(latestTime) + "' ";
         query += "ORDER BY [time] ASC";
-        //clearInterval(updateInterval);
         executeSqlQuery(query, function(jsonp) {
             var data = transformData(jsonp);
             if (data.sfl.length) {
                 console.log("Added " + data.sfl.length + " data points");
-                //++ucount;
-                //console.log(ucount * 3);
                 sflxf.add(data.sfl);
                 popxf.add(data.pop);
                 rangexf.add(data.range);
                 updateRangeChart();
                 updateCharts();
-                updateMapColors();
+                //updateMapColors();
+                updateLagText();
             }
         });
     }
@@ -906,7 +910,3 @@ infoBox = new InfoBox({
 
 $('.gridly').gridly({gutter:4, base:60, columns:16, draggable: false});
 google.maps.event.addDomListener(window, 'load', initialize);
-
-//var ucount = 0;
-
-//initialize();

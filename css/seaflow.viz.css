@@ -117,12 +117,6 @@ body {
 	height: 300px;
 }
 
-/*.svgwrap {
-	position: relative;
-	width: 100%;
-	height: 100%;	
-}*/
-
 .text {
 	width: 950px;
 	height: 160px;
@@ -142,4 +136,9 @@ body {
 .dc-chart .grid-line line {
 	opacity: .75;
 	stroke: #aaa;
+}
+
+.update-lag-msg {
+	color: #ff0000;
+	font-weight: bold;
 }

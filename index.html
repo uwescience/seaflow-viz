@@ -41,7 +41,8 @@
 				(award 1064505), the Gordon and Betty Moore Foundation, Microsoft
 				Research, and the Simons Foundation. </p>	
                   
-                  <strong> <font color = "ff0000">Cruise is now over</strong></font>
+                  <!--<span class='update-lag-msg'>Cruise is now over</span>-->
+                  <span class='update-lag-msg' id='update-lag'></span>
                   <!-- <strong><label id='stats_time'></label><br /> <label id='sfl_time'></label></strong> -->
 			<!-- <font color='ff0000'> cruise is now over </font> -->
 		<!--	<p>
@@ -49,7 +50,7 @@
 					href="mailto:Daniel Halperin <dhalperi@escience.washington.edu>">dhalperi@escience.washington.edu</a>.
 			</p> -->
 		</div>
-    <div class="range-title"><strong>Select a time range</strong></div>
+    <div class="range-title"><strong>Select a time range on the light intensity plot below</strong></div>
     <div class="range" id='rangeChart'>
       <a class='reset' href='javascript:charts["rangeChart"].filterAll();dc.redrawAll();' style='display: none;'>clear selection</a><br />
     </div>
@@ -58,10 +59,7 @@
     <div class="time" id="velocity"></div>
     <div class="time" id="ocean_tmp"></div>
     <div class="time" id="salinity"></div>
-    <!--<div class="time" id="par"></div>-->
-    
-      
-    
+
     <div class='caption'>Abundances (top panel) and Forward scatter (bottom panel), a proxy of cell size, of <i>Prochlorococcus</i>
         , <i>Synechococcus</i>, Picoeukayotes, and reference calibration beads over time. 
         Click on the name of the population to unselect it.
