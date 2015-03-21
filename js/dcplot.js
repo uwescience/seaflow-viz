@@ -90,6 +90,7 @@ function initShipTracks(map) {
       var tracks = jsonp['data'];
       if (tracks.length == 0) {
         console.log('no new track points');
+        addShipTracks(map);  // call here because initShipTracks query won't return data until there are 500 points
         return;
       } else {
         console.log(tracks.length + ' new track points');
