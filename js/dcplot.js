@@ -799,6 +799,7 @@ function plot(jsonp) {
     updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
 
     updateLagText();
+    lagTextInterval = setInterval(updateLagText, 1000 * 5);  // every 5 sec
 
     var t3 = new Date().getTime();
 
@@ -898,7 +899,6 @@ function update() {
                 updateRangeChart();
                 updateCharts();
                 //updateMapColors();
-                updateLagText();
             }
         });
     }
