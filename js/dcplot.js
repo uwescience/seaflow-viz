@@ -59,7 +59,7 @@ var infobox;
 
 // Put the ship icon at the most recent location
 function setupShipIcon(map) {
-    console.log("setting ship at recent " + recentShipLocation);
+    console.log("setting ship at recent " + recentShipLocation + " " + labelFormat(recentShipTimestamp));
     shipMarker.setMap(map);
     shipMarker.setPosition(recentShipLocation);
 }
@@ -188,9 +188,8 @@ function addShipTracks(map) {
       }
 
       // Save the most recent point
-      console.log('timestamp = ' + curTimestamp);
       recentShipLocation = curPoint;
-      recentShipTimestamp = new Date(curTimestamp);
+      recentShipTimestamp = timeFormat.parse(curTimestamp);
 
       setupShipIcon(map);
 
