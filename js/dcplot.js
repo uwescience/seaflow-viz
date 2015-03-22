@@ -1006,11 +1006,9 @@ function update() {
                 query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation] ";
                 query += "WHERE [time] > '" + latestCstar.toISOString() + "' ";
                 query += "ORDER BY [time] ASC";
-                console.log(query);
                 executeSqlQuery(query, function(jsonp) {
                     var data = transformDataCSTAR(jsonp);
                     if (data.cstar.length) {
-                        console.log(data.cstar, jsonp);
                         console.log("Added " + data.cstar.length + " CSTAR data points");
                         cstarxf.add(data.cstar);
                     } else {
