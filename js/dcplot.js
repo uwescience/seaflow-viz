@@ -52,6 +52,16 @@ var cstarxf;
 var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");  // format for chart point label time
 var timeFormat = d3.time.format.utc("%m/%d/%Y %H:%M:%S %p");    // parse UTC Date for SQLShare time field
 var pinnedToMostRecent = false;  // should time selection be pinned to most recent data?
+var yDomains = {
+    rangeChart: [0, 0.3],
+    velocity: [0, 20],
+    ocean_tmp: null,
+    salinity: null,
+    par: null,
+    attenuation: [0, 0.3],
+    conc: null,
+    size: null
+};
 
 // Track which populations should be shown in plots
 var popFlags = {};
@@ -399,13 +409,13 @@ function plotLineChart(key, yAxisLabel) {
     var binSize = getBinSize(minMaxTime);
     var dim = timeDims[binSize];
     var group = groups[key][binSize];
-    var minMaxY = d3.extent(group.all(), valueAccessor);
+    var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
     chart
         .width(480)
         .height(120)
         .x(d3.time.scale.utc().domain(minMaxTime))
-        .y(d3.scale.linear().domain(minMaxY))
+        .y(d3.scale.linear().domain(yAxisDomain))
         .brushOn(false)
         .clipPadding(10)
         .renderDataPoints({
@@ -438,7 +448,7 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
     var binSize = getBinSize(minMaxTime);
     var dim = timePopDims[binSize];
     var group = groups[key][binSize];
-    var minMaxY = d3.extent(group.all(), valueAccessor);
+    var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
     // As small performance improvement, hardcode substring positions since
     // we know the key is always something like "1426522573342_key" and the
@@ -459,7 +469,7 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
         .height(300)
         .chart(dc.lineChart)
         .x(d3.time.scale.utc().domain(minMaxTime))
-        .y(d3.scale.linear().domain(minMaxY))
+        .y(d3.scale.linear().domain(yAxisDomain))
         .ordinalColors(["#FFBB78", "#FF7F0E", "#1F77B4", "#AEC7E8"])
         .renderHorizontalGridLines(true)
         .renderVerticalGridLines(true)
@@ -512,14 +522,15 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
 }
 
 function plotRangeChart(yAxisLabel, yAxisDomain) {
-    var chart = dc.lineChart("#rangeChart");
-    charts["rangeChart"] = chart;
+    var key = "rangeChart"
+    var chart = dc.lineChart("#" + key);
+    charts[key] = chart;
 
     var minMaxTime = [rangeDims[1].bottom(1)[0].time, rangeDims[1].top(1)[0].time];
     var binSize = getBinSize(minMaxTime);
     var dim = rangeDims[binSize];
     var group = groups.rangeChart[binSize];
-    var minMaxY = d3.extent(group.all(), valueAccessor);
+    var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
     chart
         .width(1000)
@@ -583,7 +594,7 @@ function updateCharts() {
             charts[key].group(groups[key][binSize]);
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
-            recalculateY(charts[key]);
+            recalculateY(charts[key], yDomains[key]);
             // clear DOM nodes to prevent memory leaks before render
             charts[key].resetSvg();
             charts[key].render();
@@ -596,7 +607,7 @@ function updateCharts() {
             charts[key].group(groups[key][binSize]);
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
-            recalculateY(charts[key]);
+            recalculateY(charts[key], yDomains[key]);
             // clear DOM nodes to prevent memory leaks before render
             var s = charts[key].svg();
             charts[key].resetSvg();
@@ -612,7 +623,7 @@ function updateCharts() {
             charts[key].group(groups[key][binSize]);
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
-            recalculateY(charts[key]);
+            recalculateY(charts[key], yDomains[key]);
             // clear DOM nodes to prevent memory leaks before render
             charts[key].resetSvg();
             charts[key].render();
@@ -655,9 +666,13 @@ function updateRangeChart() {
         charts.rangeChart.dimension(rangeDims[rangeBinSize]);
         charts.rangeChart.group(groups.rangeChart[rangeBinSize]);
         charts.rangeChart.expireCache();
-        var minMaxY = d3.extent(groups.rangeChart[rangeBinSize].all(), valueAccessor);
+        if (! yDomains.rangeChart) {
+            var yAxisDomain = d3.extent(groups.rangeChart[rangeBinSize].all(), valueAccessor);
+        } else {
+            var yAxisDomain = yDomains.rangeChart;
+        }
         charts.rangeChart.x().domain(totalTimeRange);
-        charts.rangeChart.y().domain(minMaxY);
+        charts.rangeChart.y().domain(yAxisDomain);
         // Also need to reset the brush extent to compensate for any potential
         // shifts in the X axis
         if (filter !== null) {
@@ -708,45 +723,49 @@ function valueAccessor(d) {
 
 // Recalculate y range for values in filterRange.  Must re-render/redraw to
 // update plot.
-function recalculateY(chart) {
+function recalculateY(chart, yDomain) {
     if (! chart) {
         return;
     }
-    if (chart.children !== undefined) {
-        // Population series plot
-        // key for dimension is [time, pop]
-        var timeKey = function(element) {
-            var parts = element.key.split("_");
-            return new Date(+parts[0]);
-        };
-    } else {
-        // Single line chart
-        // key for dimension is time
-        var timeKey = function(element) { return element.key; };
-    }
+    if (! yDomain) {
+        if (chart.children !== undefined) {
+            // Population series plot
+            // key for dimension is [time, pop]
+            var timeKey = function(element) {
+                var parts = element.key.split("_");
+                return new Date(+parts[0]);
+            };
+        } else {
+            // Single line chart
+            // key for dimension is time
+            var timeKey = function(element) { return element.key; };
+        }
 
-    if (timeRange) {
-        var valuesInRange = chart.group().all().filter(function(element, index, array) {
-            return (timeKey(element) >= timeRange[0] && timeKey(element) < timeRange[1]);
+        if (timeRange) {
+            var valuesInRange = chart.group().all().filter(function(element, index, array) {
+                return (timeKey(element) >= timeRange[0] && timeKey(element) < timeRange[1]);
+            });
+        } else {
+            var valuesInRange = chart.group().all();
+        }
+
+        // If data has been filtered, some group elements may have no data, which would
+        // cause minMaxY to always anchor at 0. Filter out those values here.
+        var nonNull = valuesInRange.filter(function(d) {
+            return valueAccessor(d) !== null;
         });
+        var minMaxY = d3.extent(nonNull, function(d) {
+            return valueAccessor(d);
+        });
+        // Make sure there is some distance within Y axis if all values are the same
+        if (minMaxY[1] - minMaxY[0] === 0) {
+            minMaxY[0] -= .1;
+            minMaxY[1] += .1;
+        }
+        chart.y(d3.scale.linear().domain(minMaxY));
     } else {
-        var valuesInRange = chart.group().all();
+        chart.y(d3.scale.linear().domain(yDomain));
     }
-
-    // If data has been filtered, some group elements may have no data, which would
-    // cause minMaxY to always anchor at 0. Filter out those values here.
-    var nonNull = valuesInRange.filter(function(d) {
-        return valueAccessor(d) !== null;
-    });
-    var minMaxY = d3.extent(nonNull, function(d) {
-        return valueAccessor(d);
-    });
-    // Make sure there is some distance within Y axis if all values are the same
-    if (minMaxY[1] - minMaxY[0] === 0) {
-        minMaxY[0] -= .1;
-        minMaxY[1] += .1;
-    }
-    chart.y(d3.scale.linear().domain(minMaxY));
 }
 
 function getBinSize(dateRange) {
@@ -877,7 +896,7 @@ function plot(jsonp) {
             });
         });
 
-        plotLineChart("attenuation", "Attenuation (m-1)");
+        plotLineChart("attenuation", "Attenuation (m-1)", [0, 0.3]);
 
         updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
 
