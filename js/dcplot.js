@@ -405,7 +405,7 @@ function plotLineChart(key, yAxisLabel) {
     var chart = dc.lineChart("#" + key);
     charts[key] = chart;
 
-    var minMaxTime = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    var minMaxTime = timeRange;
     var binSize = getBinSize(minMaxTime);
     var dim = timeDims[binSize];
     var group = groups[key][binSize];
@@ -444,7 +444,7 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
     var chart = dc.seriesChart("#" + key);
     charts[key] = chart;
 
-    var minMaxTime = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    var minMaxTime = timeRange;
     var binSize = getBinSize(minMaxTime);
     var dim = timePopDims[binSize];
     var group = groups[key][binSize];
@@ -809,7 +809,13 @@ function plot(jsonp) {
 
     var msIn3Min = 3 * 60 * 1000;
     timeDims[1] = sflxf.dimension(function(d) { return d.time; });
+    // Select the last day by default. If there is less than a day of data
+    // select all data.
     timeRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
+    timeRangeSizeMilli = timeRange[1].getTime() - timeRange[0].getTime();
+    if (timeRangeSizeMilli >= 1000 * 60 * 60 * 24) {
+        timeRange = [new Date(timeRange[1].getTime() - 1000 * 60 * 60 * 24), timeRange[1]];
+    }
     var first = timeDims[1].bottom(1)[0].time;
     timeDims[2] = sflxf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
     timeDims[3] = sflxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
@@ -862,15 +868,7 @@ function plot(jsonp) {
     configureLegendButtons(charts["size"]);
 
     plotRangeChart("PAR (w/m2)", [0.0, 0.30]);
-
-    // Select the last day by default. If there is less than a day of data
-    // select all data.
-    timeRangeSizeMilli = timeRange[1].getTime() - timeRange[0].getTime();
-    if (timeRangeSizeMilli < 1000 * 60 * 60 * 24) {
-        charts.rangeChart.filter(timeRange);
-    } else {
-        charts.rangeChart.filter([new Date(timeRange[1].getTime() - 1000 * 60 * 60 * 24), timeRange[1]]);
-    }
+    charts.rangeChart.filter(timeRange);  // set default brush selection
     updateRangeChart();
 
     var query = "SELECT *";
@@ -987,10 +985,9 @@ function update() {
     if (timeDims[1] !== undefined) {
 
         var latestTime = timeDims[1].top(1)[0].time;
-        var tsqlFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S %p");
         var query = "SELECT * ";
         query += "FROM [seaflow.viz@gmail.com].[SeaFlow All Data] ";
-        query += "WHERE [time] > '" + tsqlFormat(latestTime) + "' ";
+        query += "WHERE [time] > '" + latestTime.toISOString() + "' ";
         query += "ORDER BY [time] ASC";
         executeSqlQuery(query, function(jsonp) {
             var data = transformData(jsonp);
@@ -999,14 +996,21 @@ function update() {
                 sflxf.add(data.sfl);
                 popxf.add(data.pop);
                 rangexf.add(data.range);
-                var latestCstar = cstarDims[1].bottom(1)[0].time;
+                // Add one second to make sure we don't regrab the latest time point.
+                // sqlshare by default returns a time string with 1 second precision,
+                // but in the db the latest time will have some milliseconds as well
+                // which which always return 1 data point below even if there was no new
+                // data
+                var latestCstar = new Date(cstarDims[1].top(1)[0].time.getTime() + 1000);
                 var query = "SELECT * ";
                 query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation] ";
-                query += "WHERE [time] > '" + tsqlFormat(latestCstar) + "' ";
+                query += "WHERE [time] > '" + latestCstar.toISOString() + "' ";
                 query += "ORDER BY [time] ASC";
+                console.log(query);
                 executeSqlQuery(query, function(jsonp) {
                     var data = transformDataCSTAR(jsonp);
                     if (data.cstar.length) {
+                        console.log(data.cstar, jsonp);
                         console.log("Added " + data.cstar.length + " CSTAR data points");
                         cstarxf.add(data.cstar);
                     } else {
