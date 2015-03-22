@@ -42,11 +42,13 @@ var groups = {};
 var timeDims = {};
 var rangeDims = {};
 var timePopDims = {};
+var cstarDims = {};
 var popDim;
 var timeRange = null;
 var sflxf;
 var rangexf;
 var popxf;
+var cstarxf;
 var labelFormat = d3.time.format.utc("%Y-%m-%d %H:%M:%S GMT");  // format for chart point label time
 var timeFormat = d3.time.format.utc("%m/%d/%Y %H:%M:%S %p");    // parse UTC Date for SQLShare time field
 var pinnedToMostRecent = false;  // should time selection be pinned to most recent data?
@@ -56,6 +58,8 @@ var popFlags = {};
 popNames.forEach(function(p) { popFlags[p] = true; });
 
 var infobox;
+
+dc.disableTransitions = true;
 
 // Put the ship icon at the most recent location
 function setupShipIcon(map) {
@@ -305,6 +309,49 @@ function transformData(jsonp) {
     }
 
     return { sfl: sflValues, range: rangeValues, pop: popValues };
+}
+
+// Turn jsonp data from SQL share query result into an arrays of JSON objects
+// that can be easily fed to crossfilter/dc.js
+function transformDataCSTAR(jsonp) {
+    if (jsonp.header.length < 2) {
+        alert('Query ' + data.sql + ' returned ' + jsonp.header.length + ' columns, needs at least 2');
+        return;
+    }
+
+    // Figure out which columns correspond to which column headers
+    idx = {};
+    for (var col = 0; col < jsonp.header.length; col++) {
+        idx[jsonp.header[col]] = col;
+    }
+
+    var cstarValues = [];    // cstar data
+
+    var msecMinute = 60 * 1000;
+    var prevTime = null;
+    for (var i in jsonp.data) {
+        var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
+
+        // If this record is more than 4 minutes from last record, assume
+        // records are missing and add a placeholder empty record. Only need 
+        // one placeholder record per gap.  This placeholder record makes it
+        // possible to draw line chart with gaps.
+        if (i > 0 && (curTime - prevTime) > 4 * msecMinute) {
+            cstarValues.push({
+                time: new Date(prevTime.getTime() + (3 * msecMinute)),
+                attenuation: null
+            });
+        }
+
+        cstarValues.push({
+            time: curTime,
+            attenuation: jsonp.data[i][idx["attenuation"]]
+        });
+
+        prevTime = curTime;
+    }
+
+    return { cstar: cstarValues };
 }
 
 // Reduce functions to stop crossfilter from coercing null values to 0
@@ -559,6 +606,19 @@ function updateCharts() {
         }
     });
 
+    ["attenuation"].forEach(function(key) {
+        if (charts[key]) {
+            charts[key].dimension(timeDims[binSize]);
+            charts[key].group(groups[key][binSize]);
+            charts[key].expireCache();
+            charts[key].x().domain(timeRange);
+            recalculateY(charts[key]);
+            // clear DOM nodes to prevent memory leaks before render
+            charts[key].resetSvg();
+            charts[key].render();
+        }
+    });
+
     var t1 = new Date();
     //console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
 }
@@ -715,7 +775,6 @@ function ceiling(input) {
 }
 
 function plot(jsonp) {
-    dc.disableTransitions = true;
     var t0 = new Date().getTime();
 
     var data = transformData(jsonp);
@@ -795,17 +854,43 @@ function plot(jsonp) {
     }
     updateRangeChart();
 
-    updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
+    var query = "SELECT *";
+    query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation] ";
+    query += "ORDER BY [time] ASC";
+    executeSqlQuery(query, function(jsonp) {
+        var data = transformDataCSTAR(jsonp);
 
-    updateLagText();
-    lagTextInterval = setInterval(updateLagText, 1000 * 5);  // every 5 sec
+        cstarxf = crossfilter(data.cstar);
 
-    var t3 = new Date().getTime();
+        var msIn3Min = 3 * 60 * 1000;
+        cstarDims[1] = cstarxf.dimension(function(d) { return d.time; });
+        var first = cstarDims[1].bottom(1)[0].time;
+        cstarDims[2] = cstarxf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
+        cstarDims[3] = cstarxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
+        cstarDims[4] = cstarxf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
 
-    /*console.log("transform time = " + ((t1 - t0) / 1000));
-    console.log("crossfilter setup time = " + ((t2 - t1) / 1000));
-    console.log("plot time = " + ((t3 - t2) / 1000));
-    console.log("total time = " + ((t3 - t0) / 1000));*/
+        ["attenuation"].forEach(function(key) {
+            groups[key] = {};
+            [1,2,3,4].forEach(function(binSize) {
+                groups[key][binSize] = cstarDims[binSize].group().reduce(
+                    reduceAdd(key), reduceRemove(key), reduceInitial);
+            });
+        });
+
+        plotLineChart("attenuation", "Attenuation (m-1)");
+
+        updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
+
+        updateLagText();
+        lagTextInterval = setInterval(updateLagText, 1000 * 5);  // every 5 sec
+
+        var t3 = new Date().getTime();
+
+        /*console.log("transform time = " + ((t1 - t0) / 1000));
+        console.log("crossfilter setup time = " + ((t2 - t1) / 1000));
+        console.log("plot time = " + ((t3 - t2) / 1000));
+        console.log("total time = " + ((t3 - t0) / 1000));*/
+    });
 }
 
 // Needs to be called after chart with population legend is rendered.
@@ -895,14 +980,27 @@ function update() {
                 sflxf.add(data.sfl);
                 popxf.add(data.pop);
                 rangexf.add(data.range);
-                updateRangeChart();
-                updateCharts();
-                //updateMapColors();
+                var latestCstar = cstarDims[1].bottom(1)[0].time;
+                var query = "SELECT * ";
+                query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation] ";
+                query += "WHERE [time] > '" + tsqlFormat(latestCstar) + "' ";
+                query += "ORDER BY [time] ASC";
+                executeSqlQuery(query, function(jsonp) {
+                    var data = transformDataCSTAR(jsonp);
+                    if (data.cstar.length) {
+                        console.log("Added " + data.cstar.length + " CSTAR data points");
+                        cstarxf.add(data.cstar);
+                    } else {
+                        console.log("No new CSTAR data");
+                    }
+                    updateRangeChart();
+                    updateCharts();
+                    //updateMapColors();
+                });
             }
         });
     }
 }
-
 
 infoBox = new InfoBox({
   alignBottom : true,

@@ -98,7 +98,7 @@ body {
 
 .gmap {
 	width: 500px;
-	height: 360px;
+	height: 480px;
 }
 
 .range {
@@ -141,4 +141,8 @@ body {
 .update-lag-msg {
 	color: #ff0000;
 	font-weight: bold;
+}
+
+#attenuation text.y-axis-label {
+	font-size: 10px;
 }
