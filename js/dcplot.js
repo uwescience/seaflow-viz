@@ -776,12 +776,13 @@ function getBinSize(dateRange) {
     var msInRange = dateRange[1].getTime() - dateRange[0].getTime();
     var points = ceiling(msInRange / msIn3Min);
 
-    // Figure out how large to make each bin (in ms) in order to keep points
+    // Figure out how large to make each bin (in 480 3 minute point increments)
+    // in order to keep points
     // below maxPoints. e.g. if there are 961 3 minute points in range,
     // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
     // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
-    return ceiling(points / maxPoints);
-    //return 4;
+    return Math.min(ceiling(points / maxPoints), 4);
+    //return 1;
 }
 
 function roundDate(date, firstDate, binSizeMilli) {
