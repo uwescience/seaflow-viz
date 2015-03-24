@@ -349,13 +349,20 @@ function transformDataCSTAR(jsonp) {
         if (i > 0 && (curTime - prevTime) > 4 * msecMinute) {
             cstarValues.push({
                 time: new Date(prevTime.getTime() + (3 * msecMinute)),
-                attenuation: null
+                attenuation: null,
+                type: "whole"
+            });
+            cstarValues.push({
+                time: new Date(prevTime.getTime() + (3 * msecMinute)),
+                attenuation: null,
+                type: "filtered"
             });
         }
 
         cstarValues.push({
             time: curTime,
-            attenuation: jsonp.data[i][idx["attenuation"]]
+            attenuation: jsonp.data[i][idx["attenuation"]],
+            type: jsonp.data[i][idx["type"]]
         });
 
         prevTime = curTime;
@@ -440,7 +447,7 @@ function plotLineChart(key, yAxisLabel) {
     chart.render();
 }
 
-function plotSeriesChart(key, yAxisLabel, legendFlag) {
+function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     var chart = dc.seriesChart("#" + key);
     charts[key] = chart;
 
@@ -521,7 +528,7 @@ function plotSeriesChart(key, yAxisLabel, legendFlag) {
     chart.render();
 }
 
-function plotRangeChart(yAxisLabel, yAxisDomain) {
+function plotRangeChart(yAxisLabel) {
     var key = "rangeChart"
     var chart = dc.lineChart("#" + key);
     charts[key] = chart;
@@ -556,6 +563,87 @@ function plotRangeChart(yAxisLabel, yAxisDomain) {
     });
     chart.margins().left = 60;
     chart.yAxis().ticks(4);
+    chart.render();
+}
+
+function plotCSTARSeriesChart(key, yAxisLabel, legendFlag) {
+    var chart = dc.seriesChart("#" + key);
+    charts[key] = chart;
+
+    var minMaxTime = timeRange;
+    var binSize = getBinSize(minMaxTime);
+    var dim = timePopDims[binSize];
+    var group = groups[key][binSize];
+    var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
+
+    // As small performance improvement, hardcode substring positions since
+    // we know the key is always something like "1426522573342_key" and the
+    // length of the milliseconds string from Date.getTime() won't change until
+    // 2286
+    var keyAccessor = function(d) {
+        return new Date(+(d.key.substr(0, 13)));
+    };
+    var seriesAccessor = function(d) {
+        return d.key.substr(14);
+    };
+
+    var minMaxY = d3.extent(group.all(), valueAccessor);
+    var legendHeight = 15;  // size of legend
+
+    chart
+        .width(480)
+        .height(120)
+        .chart(dc.lineChart)
+        .x(d3.time.scale.utc().domain(minMaxTime))
+        .y(d3.scale.linear().domain(yAxisDomain))
+        .ordinalColors(["#1F77B4", "#B18904"])
+        .renderHorizontalGridLines(false)
+        .renderVerticalGridLines(false)
+        .dimension(dim)
+        .group(group)
+        .seriesAccessor(seriesAccessor)
+        .keyAccessor(keyAccessor)
+        .valueAccessor(valueAccessor)
+        .brushOn(false)
+        .clipPadding(10)
+        .yAxisLabel(yAxisLabel)
+        .xAxisLabel("Time (GMT)")
+        .title(function(d) {
+            return labelFormat(keyAccessor(d)) + "\n" + d3.format(".2f")(valueAccessor(d));
+        })
+        .childOptions(
+        {
+            defined: function(d) {
+                // don't plot segements with missing data
+                return (d.y !== null);
+            },
+            interpolate: "cardinal",
+            renderDataPoints: {
+                radius: 3,
+                fillOpacity: 0.65,
+                strokeOpacity: 1
+            }
+        });
+    chart.margins().left = 60;
+    chart.yAxis().ticks(6);
+    chart.yAxis().tickFormat(d3.format(".2f"))
+
+    // Legend setup
+    if (legendFlag) {
+        //chart.margins().top = legendHeight + 5;
+        chart.legend(dc.legend()
+            .x(320)
+            .y(0)
+            .itemHeight(legendHeight)
+            .gap(10)
+            .horizontal(true)
+            .autoItemWidth(true)
+        );
+    } else {
+        // adjust chart size so that plot area is same size as chart with legend
+        chart.height(chart.height() - legendHeight + 5);
+    }
+    
     chart.render();
 }
 
@@ -781,7 +869,7 @@ function getBinSize(dateRange) {
     // below maxPoints. e.g. if there are 961 3 minute points in range,
     // then the new bin size would be 3 * 3 minutes = 9 minutes. If there
     // were 960 the new bin size would be 2 * 3 minutes = 6 minutes.
-    return Math.min(ceiling(points / maxPoints), 4);
+    return Math.min(ceiling(points / maxPoints), 8);
     //return 1;
 }
 
@@ -818,40 +906,46 @@ function plot(jsonp) {
         timeRange = [new Date(timeRange[1].getTime() - 1000 * 60 * 60 * 24), timeRange[1]];
     }
     var first = timeDims[1].bottom(1)[0].time;
-    timeDims[2] = sflxf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
-    timeDims[3] = sflxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
-    timeDims[4] = sflxf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
+    [2,3,4,5,6,7,8].forEach(function(binSize) {
+        timeDims[binSize] = sflxf.dimension(function(d) {
+            return roundDate(d.time, first, binSize*msIn3Min);
+        });
+    });
 
     ["velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
         groups[key] = {};
-        [1,2,3,4].forEach(function(binSize) {
+        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
             groups[key][binSize] = timeDims[binSize].group().reduce(
                 reduceAdd(key), reduceRemove(key), reduceInitial);
         });
     });
 
     rangeDims[1] = rangexf.dimension(function(d) { return d.time; });
-    rangeDims[2] = rangexf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
-    rangeDims[3] = rangexf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
-    rangeDims[4] = rangexf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
+    [2,3,4,5,6,7,8].forEach(function(binSize) {
+        rangeDims[binSize] = rangexf.dimension(function(d) {
+            return roundDate(d.time, first, binSize*msIn3Min);
+        });
+    });
 
     (function(key) {
         groups.rangeChart = {};
-        [1,2,3,4].forEach(function(binSize) {
+        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
             groups.rangeChart[binSize] = rangeDims[binSize].group().reduce(
                 reduceAdd(key), reduceRemove(key), reduceInitial);
         });
     }("par"));
 
     timePopDims[1] = popxf.dimension(function(d) { return String(d.time.getTime()) + "_" + d.pop; });
-    timePopDims[2] = popxf.dimension(function(d) { return String(roundDate(d.time, first, 2*msIn3Min).getTime()) + "_" + d.pop; });
-    timePopDims[3] = popxf.dimension(function(d) { return String(roundDate(d.time, first, 3*msIn3Min).getTime()) + "_" + d.pop; });
-    timePopDims[4] = popxf.dimension(function(d) { return String(roundDate(d.time, first, 4*msIn3Min).getTime()) + "_" + d.pop; });
+    [2,3,4,5,6,7,8].forEach(function(binSize) {
+        timePopDims[binSize] = popxf.dimension(function(d) {
+            return String(roundDate(d.time, first, binSize*msIn3Min).getTime()) + "_" + d.pop;
+        });
+    });
     popDim = popxf.dimension(function(d) { return d.pop; });
 
     ["conc", "size"].forEach(function(key) {
         groups[key] = {};
-        [1,2,3,4].forEach(function(binSize) {
+        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
             groups[key][binSize] = timePopDims[binSize].group().reduce(
                 reduceAdd(key), reduceRemove(key), reduceInitial);
         });
@@ -863,17 +957,18 @@ function plot(jsonp) {
     plotLineChart("ocean_tmp", "Temp (degC)");
     plotLineChart("salinity", "Salinity (psu)");
 
-    plotSeriesChart("conc", "Abundance (10^6 cells/L)", legend = true);
-    plotSeriesChart("size", "Forward scatter (a.u.)", legend = true);
+    plotPopSeriesChart("conc", "Abundance (10^6 cells/L)", legend = true);
+    plotPopSeriesChart("size", "Forward scatter (a.u.)", legend = true);
     configureLegendButtons(charts["conc"]);
     configureLegendButtons(charts["size"]);
 
-    plotRangeChart("PAR (w/m2)", [0.0, 0.30]);
+    plotRangeChart("PAR (w/m2)");
     charts.rangeChart.filter(timeRange);  // set default brush selection
     updateRangeChart();
 
-    var query = "SELECT *";
-    query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation] ";
+    var query = "SELECT [time], attenuation, [type] ";
+    query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation typed] ";
+    query += "WHERE [type] != 'mixed'"
     query += "ORDER BY [time] ASC";
     executeSqlQuery(query, function(jsonp) {
         var data = transformDataCSTAR(jsonp);
@@ -881,21 +976,23 @@ function plot(jsonp) {
         cstarxf = crossfilter(data.cstar);
 
         var msIn3Min = 3 * 60 * 1000;
-        cstarDims[1] = cstarxf.dimension(function(d) { return d.time; });
+        cstarDims[1] = cstarxf.dimension(function(d) { return String(d.time.getTime()) + "_" + d.type; });
         var first = cstarDims[1].bottom(1)[0].time;
-        cstarDims[2] = cstarxf.dimension(function(d) { return roundDate(d.time, first, 2*msIn3Min); });
-        cstarDims[3] = cstarxf.dimension(function(d) { return roundDate(d.time, first, 3*msIn3Min); });
-        cstarDims[4] = cstarxf.dimension(function(d) { return roundDate(d.time, first, 4*msIn3Min); });
+        [2,3,4,5,6,7,8].forEach(function(binSize) {
+            cstarDims[binSize] = cstarxf.dimension(function(d) {
+                return String(roundDate(d.time, first, binSize*msIn3Min).getTime()) + "_" + d.type;
+            });
+        });
 
         ["attenuation"].forEach(function(key) {
             groups[key] = {};
-            [1,2,3,4].forEach(function(binSize) {
+            [1,2,3,4,5,6,7,8].forEach(function(binSize) {
                 groups[key][binSize] = cstarDims[binSize].group().reduce(
                     reduceAdd(key), reduceRemove(key), reduceInitial);
             });
         });
 
-        plotLineChart("attenuation", "Attenuation (m-1)", [0, 0.3]);
+        plotCSTARSeriesChart("attenuation", "Attenuation (m-1)", legend = true);
 
         updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
 
@@ -1003,9 +1100,10 @@ function update() {
                 // which which always return 1 data point below even if there was no new
                 // data
                 var latestCstar = new Date(cstarDims[1].top(1)[0].time.getTime() + 1000);
-                var query = "SELECT * ";
-                query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation] ";
+                var query = "SELECT [time], attenuation, [type] ";
+                query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation typed] ";
                 query += "WHERE [time] > '" + latestCstar.toISOString() + "' ";
+                query += "AND [type] != 'mixed' ";
                 query += "ORDER BY [time] ASC";
                 executeSqlQuery(query, function(jsonp) {
                     var data = transformDataCSTAR(jsonp);
@@ -1019,6 +1117,8 @@ function update() {
                     updateCharts();
                     //updateMapColors();
                 });
+            } else {
+                console.log("No new data");
             }
         });
     }
