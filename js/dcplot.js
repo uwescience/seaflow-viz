@@ -18,10 +18,11 @@ var shipMarker = new google.maps.Marker({
     scaledSize : new google.maps.Size(40, 40)
   }
 });
-// Map historical ship location markers
-var circles = [];
+var unselectedCruisePath1, unselectedCruisePath2, selectedCruisePath;
 // The bounds of the known points in the map
 var mapBounds = new google.maps.LatLngBounds();
+var map;
+var mapLocs = [];
 // Whether the map has been zoomed yet
 var hasZoomed = false;
 // SQLShare REST server for queries
@@ -72,154 +73,117 @@ var infobox;
 dc.disableTransitions = true;
 
 // Put the ship icon at the most recent location
-function setupShipIcon(map) {
+function setupShipIcon() {
     console.log("setting ship at recent " + recentShipLocation + " " + labelFormat(recentShipTimestamp));
     shipMarker.setMap(map);
     shipMarker.setPosition(recentShipLocation);
 }
 
-function zoomMapToBounds(map) {
+function zoomMapToBounds() {
     map.fitBounds(mapBounds);
 }
 
-// Get the ship tracks
-function initShipTracks(map) {
-  console.log('initializing ship tracks');
-  var query = 'WITH all_tracks AS (SELECT *, ROW_NUMBER() OVER (ORDER BY [time] ASC) AS row FROM [seaflow.viz@gmail.com].[SFL_VIEW]),\n';
-  query += 'track_stats AS (SELECT COUNT(*) as num_tracks, CASE WHEN COUNT(*) < 1000 THEN 1 ELSE convert(int, (COUNT(*)+999)/1000) END AS granularity FROM all_tracks)\n';
-  query += 'SELECT lat, lon, [time]\n';
-  query += 'FROM all_tracks, track_stats\n';
-  query += 'WHERE (num_tracks-row) % granularity = 0 AND (num_tracks - row) > 495\n';
-  query += 'ORDER BY [time] ASC';
-  $.ajax({
-    url : sqlshare_query_url + encodeURIComponent(query),
-    dataType : 'jsonp',
-    type : 'GET',
-    jsonp : 'jsonp',
-    crossDomain : 'true',
-    error : function(xhr, ts, et) {
-      alert("error errorThrow:" + et);
-    },
-    success : function(jsonp) {
-      var tracks = jsonp['data'];
-      if (tracks.length == 0) {
-        console.log('no new track points');
-        addShipTracks(map);  // call here because initShipTracks query won't return data until there are 500 points
-        return;
-      } else {
-        console.log(tracks.length + ' new track points');
-      }
+// Update the ship tracks
+function getNewShipTracks() {
+    console.log('refreshing ship tracks since ' + recentShipTimestamp);
+    var query = "SELECT [time], lat, lon ";
+    query += "FROM [seaflow.viz@gmail.com].[SFL_VIEW] ";
+    query += "WHERE [time] > '" + (new Date(recentShipTimestamp.getTime() + 1000)).toISOString() + "' ";
+    query += "ORDER BY [time] ASC";
 
-      /*** Create a circle for every point ***/
-      // .. the current point and timestamp
-      var curPoint;
-      var curTimestamp;
-      // .. common options for every circle
-      var circleOptions = {
-        icon : {
-          path : google.maps.SymbolPath.CIRCLE,
-          fillColor : '#FFFFFF',
-          fillOpacity : 0.5,
-          strokeOpacity : 0,
-          scale : 1.25,
-          clickable : true
+    executeSqlQuery(query, function(jsonp) {
+        var tracks = transformDataMap(jsonp);
+        if (tracks.length == 0) {
+            console.log('no new track points');
+            return;
+        } else {
+            console.log(tracks.length + ' new track points');
         }
-      };
-      // .. do the actual work
-      for ( var index in tracks) {
-        var curTrack = tracks[index];
-        curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
-        curTimestamp = curTrack[2];
-        circleOptions.position = curPoint;
-        var circle = new google.maps.Marker(circleOptions);
-        circle.setMap(map);
-        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
-        //circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
+        // Update map bounding rectangle
+        tracks.forEach(function(t) {
+            mapBounds.extend(t.LatLng);
+            mapLocs.push(t);
+        });
 
-
-        /* Update map bounds */
-        mapBounds.extend(curPoint);
-      }
-
-      addShipTracks(map);
-    }
-  });
+        updateShipTracks();
+    });
 }
 
-// Get the ship tracks
-function addShipTracks(map) {
-  console.log('refreshing ship tracks since ' + recentShipTimestamp);
-  var query = 'SELECT * FROM (SELECT TOP 500 lat, lon, [time]\n';
-  query += 'FROM [seaflow.viz@gmail.com].[SFL_VIEW]\n';
-  query += 'WHERE [time] > CAST(\'' + recentShipTimestamp.toISOString() + '\' AS datetime)';
-  query += 'ORDER BY [time] DESC) x ORDER BY [time] ASC';
-  $.ajax({
-    url : sqlshare_query_url + encodeURIComponent(query),
-    dataType : 'jsonp',
-    type : 'GET',
-    jsonp : 'jsonp',
-    crossDomain : 'true',
-    error : function(xhr, ts, et) {
-      alert("error errorThrow:" + et);
-    },
-    success : function(jsonp) {
-      var tracks = jsonp['data'];
-      if (tracks.length == 0) {
-        console.log('no new track points');
-        return;
-      } else {
-        console.log(tracks.length + ' new track points');
-      }
-
-      /*** Create a circle for every point ***/
-      // .. the current point and timestamp
-      var curPoint;
-      var curTimestamp;
-      // .. common options for every circle
-      var circleOptions = {
-        icon : {
-          path : google.maps.SymbolPath.CIRCLE,
-          fillColor : '#FF0000',
-          fillOpacity : 1,
-          strokeOpacity : 0,
-          scale : 1.5,
-          clickable : true
-        }
-      };
-      // .. do the actual work
-      for ( var index in tracks) {
-        var curTrack = tracks[index];
-        curPoint = new google.maps.LatLng(curTrack[0], curTrack[1]);
-        curTimestamp = curTrack[2];
-        circleOptions.position = curPoint;
-        var circle = new google.maps.Marker(circleOptions);
-        circle.setMap(map);
-        google.maps.event.addListener(circle, 'mouseover', _makeMouseover(circle));
-        //circles.push({time: timeFormat.parse(curTimestamp), marker: circle});
-
-        /* Update map bounds */
-        mapBounds.extend(curPoint);
-      }
-
-      // Save the most recent point
-      recentShipLocation = curPoint;
-      recentShipTimestamp = timeFormat.parse(curTimestamp);
-
-      setupShipIcon(map);
-
-      /* Re-zoom the map */
-      zoomMapToBounds(map);
+function updateShipTracks() {
+    var t0 = new Date();
+    // Create polyline for unselected cruise path
+    if (unselectedCruisePath1) {
+        unselectedCruisePath1.setMap(null);
     }
-  });
-}
+    if (unselectedCruisePath2) {
+        unselectedCruisePath2.setMap(null);
+    }
+    if (selectedCruisePath) {
+        selectedCruisePath.setMap(null);
+    }
+    var unselectedLocs1 = [],
+        unselectedLocs2 = [],
+        selectedLocs = [];
+    if (timeRange) {
+        unselectedLocs1 = mapLocs.filter(function(d) {
+            return d.time < timeRange[0];
+        }).map(function(d) {
+            return d.LatLng;
+        });
+        unselectedLocs2 = mapLocs.filter(function(d) {
+            return d.time > timeRange[1];
+        }).map(function(d) {
+            return d.LatLng;
+        });
+        selectedLocs = mapLocs.filter(function(d) {
+            return d.time >= timeRange[0] && d.time <= timeRange[1];
+        }).map(function(d) {
+            return d.LatLng;
+        });
+    } else {
+        selectedLocs = mapLocs.map(function(d) { return d.LatLng; });
+    }
 
-// (ugly?) Workarounds for Javascript scoping. Otherwise it always uses the last-created `circle` object.
-function _makeMouseover(c) {
-  return function() {
-    infoBox.setContent('<div class="mapInfoWindow">' + c.getPosition().toUrlValue() + '</div>');
-    infoBox.setPosition(c.getPosition());
-    infoBox.open(c.getMap());
-  }
+    unselectedCruisePath1 = new google.maps.Polyline({
+        path: unselectedLocs1,
+        geodesic: true,
+        strokeColor: "#FFFFFF",
+        strokeOpacity: 1.0,
+        strokeWeight: 2
+    });
+    unselectedCruisePath1.setMap(map);
+    unselectedCruisePath2 = new google.maps.Polyline({
+        path: unselectedLocs2,
+        geodesic: true,
+        strokeColor: "#FFFFFF",
+        strokeOpacity: 1.0,
+        strokeWeight: 2
+    });
+    unselectedCruisePath2.setMap(map);
+
+    selectedCruisePath = new google.maps.Polyline({
+        path: selectedLocs,
+        geodesic: true,
+        strokeColor: "#FF0000",
+        strokeOpacity: 1.0,
+        strokeWeight: 2
+    });
+    selectedCruisePath.setMap(map);
+
+    // Add ship icon
+    if (recentShipTimestamp !== mapLocs[mapLocs.length-1].time) {
+        recentShipLocation = mapLocs[mapLocs.length-1].LatLng;
+        recentShipTimestamp = mapLocs[mapLocs.length-1].time;
+        setupShipIcon();
+    }
+
+    // Only zoom to bounds once
+    if (! hasZoomed) {
+        zoomMapToBounds();
+        hasZoomed = true;
+    }
+
+    //console.log("updateShipTracks took " + (((new Date().getTime()) - t0.getTime())/1000) + " sec");
 }
 
 function executeSqlQuery(query, cb) {
@@ -319,6 +283,25 @@ function transformData(jsonp) {
     }
 
     return { sfl: sflValues, range: rangeValues, pop: popValues };
+}
+
+function transformDataMap(jsonp) {
+    // Figure out which columns correspond to which column headers
+    idx = {};
+    for (var col = 0; col < jsonp.header.length; col++) {
+        idx[jsonp.header[col]] = col;
+    }
+
+    var coords = [];    // environmental data
+    for (var i in jsonp.data) {
+        coords.push({
+            time: timeFormat.parse(jsonp.data[i][idx["time"]]),
+            lat: jsonp.data[i][idx["lat"]],
+            lon: jsonp.data[i][idx["lon"]],
+            LatLng: new google.maps.LatLng(jsonp.data[i][idx["lat"]], jsonp.data[i][idx["lon"]])
+        });
+    }
+    return coords;
 }
 
 // Turn jsonp data from SQL share query result into an arrays of JSON objects
@@ -558,7 +541,7 @@ function plotRangeChart(yAxisLabel) {
                 console.log("focus range set to " + filter.map(d3.time.format.utc("%Y-%m-%d %H:%M:%S %p")).join(" - "));
             }
             updateCharts();
-            updateMapColors();
+            updateShipTracks();
         }, 600);
     });
     chart.margins().left = 60;
@@ -773,32 +756,6 @@ function updateRangeChart() {
 
     var t1 = new Date();
     //console.log("range chart update took " + (t1.getTime() - t0.getTime()) / 1000);
-}
-
-function updateMapColors() {
-    return;
-    var circleOptions = {
-        icon : {
-            path : google.maps.SymbolPath.CIRCLE,
-            fillColor : '#FFFFFF',
-            fillOpacity : 0.5,
-            strokeOpacity : 0,
-            scale : 1.25,
-            clickable : true
-        }
-    };
-    circles.forEach(function(c) {
-        if (c.time.getTime() >= timeRange[0].getTime() &&
-            c.time.getTime() <= timeRange[1].getTime()) {
-            circleOptions.icon.fillColor = "#FF0000";
-            circleOptions.position = c.marker.getPosition();
-            c.marker.setOptions(circleOptions);
-        } else {
-            circleOptions.icon.fillColor = "#FFFFFF";
-            circleOptions.position = c.marker.getPosition();
-            c.marker.setOptions(circleOptions);
-        }
-    });
 }
 
 function valueAccessor(d) {
@@ -1063,15 +1020,10 @@ function initialize() {
         zoom : 8,
         mapTypeId : google.maps.MapTypeId.SATELLITE
     };
-    var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+    map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 
     // Initialize ship tracks
-    initShipTracks(map);
-
-    // Refresh timer
-    setInterval(function() {
-        addShipTracks(map);
-    }, REFRESH_TIME_MILLIS);
+    getNewShipTracks();
 
     var query = "SELECT * ";
     query += "FROM [seaflow.viz@gmail.com].[SeaFlow All Data] ";
@@ -1115,7 +1067,7 @@ function update() {
                     }
                     updateRangeChart();
                     updateCharts();
-                    //updateMapColors();
+                    getNewShipTracks();
                 });
             } else {
                 console.log("No new data");
