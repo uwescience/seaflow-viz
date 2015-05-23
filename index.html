@@ -25,24 +25,24 @@
 			src="logos/sqlshare.png" height="50"></a> -->
 	</div>
 	<div id="topbar"> </div>
-	<div id="container" class="gridly"> 
+	<div id="container" class="gridly">
 		<div class='text'>
-			<p><strong><a href="http://armbrustlab.ocean.washington.edu/resources/seaflow" 
-				target="_blank">SeaFlow</a></strong>  is a novel continuous flow cytometer that can measure 
+			<p><strong><a href="http://armbrustlab.ocean.washington.edu/resources/seaflow"
+				target="_blank">SeaFlow</a></strong>  is a novel continuous flow cytometer that can measure
                         the types and abundances of photosynthetic microbial populations in the ocean.</p>
-			      This dashboard allows monitoring of SeaFlow data from land in near real-time 
-                        when SeaFlow is deployed remotely on research ships. 
-				Data are automatically processed on board the ship in three minute intervals using 
+			      This dashboard allows monitoring of SeaFlow data from land in near real-time
+                        when SeaFlow is deployed remotely on research ships.
+				Data are automatically processed on board the ship in three minute intervals using
 				<a href="https://github.com/uwescience/popcycle" target="blank"> Popcycle</a>,
                         a software program created for processing SeaFlow data. Data are managed using <a href="https://sqlshare.escience.washington.edu/" target="_blank">SQLShare</a> and visualization is created with <a href="http://d3js.org/" target="_blank">D3</a>. For performance issues, only the previous 24 hours of data are displayed in the dashboard. </p>
 			<p> This dashboard project is a collaboration betweeen UW School of Oceanography and eScience,
 				bringing together experts in microbial ecology, engineering, and data science.
 				It is sponsored by US National Science Foundation
 				(award 1064505), the Gordon and Betty Moore Foundation, Microsoft
-				Research, and the Simons Foundation. </p>	
-                  
-                  <span class='update-lag-msg'>Cruise is now over</span>
-                  <!--<span class='update-lag-msg' id='update-lag'></span>-->
+				Research, and the Simons Foundation. </p>
+
+                  <!--<span class='update-lag-msg'>Cruise is now over</span>-->
+                  <span class='update-lag-msg' id='update-lag'></span>
                   <!-- <strong><label id='stats_time'></label><br /> <label id='sfl_time'></label></strong> -->
 			<!-- <font color='ff0000'> cruise is now over </font> -->
 		<!--	<p>
@@ -62,14 +62,14 @@
     <div class="time" id="attenuation"></div>
 
     <div class='caption'>Abundances (top panel) and Forward scatter (bottom panel), a proxy of cell size, of <i>Prochlorococcus</i>
-        , <i>Synechococcus</i>, Picoeukayotes, and reference calibration beads over time. 
+        , <i>Synechococcus</i>, Picoeukayotes, and reference calibration beads over time.
         Click on the name of the population to unselect it.
     </div>
     <div class="pop" id="conc"></div>
     <div class="pop" id="size"></div>
   </div>
-  
-  
+
+
   <script src="js/infobox_packed.1.1.12.js" type="text/javascript"></script>
   <script type="text/javascript" src="js/d3.min.js" type="text/javascript"></script>
   <script type="text/javascript" src="js/jquery.min.js" type="text/javascript"></script>
