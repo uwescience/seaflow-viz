@@ -59,7 +59,7 @@ var yDomains = {
     ocean_tmp: null,
     salinity: null,
     par: null,
-    attenuation: [0, 0.3],
+    attenuation: [0.06, 0.13],
     conc: null,
     size: null
 };
@@ -93,7 +93,7 @@ function getNewShipTracks() {
 
     executeSqlQuery(query, function(jsonp) {
         var tracks = transformDataMap(jsonp);
-        if (tracks.length == 0) {
+        if (tracks.length === 0) {
             console.log('no new track points');
             return;
         } else {
@@ -198,7 +198,7 @@ function executeSqlQuery(query, cb) {
             alert("error errorThrow:" + et);
         },
         success : function(jsonp) {
-            console.log("SQL query took " + (((new Date().getTime()) - t0.getTime())/1000) + " sec")
+            console.log("SQL query took " + (((new Date().getTime()) - t0.getTime())/1000) + " sec");
             cb(jsonp);
         }
     });
@@ -231,7 +231,7 @@ function transformData(jsonp) {
     var msecMinute = 60 * 1000;
     var prevTime = null;
     for (var i in jsonp.data) {
-        var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
+        var curTime = timeFormat.parse(jsonp.data[i][idx.time]);
 
         // If this record is more than 4 minutes from last record, assume
         // records are missing and add a placeholder empty record. Only need 
@@ -261,14 +261,14 @@ function transformData(jsonp) {
 
         sflValues.push({
             time: curTime,
-            ocean_tmp: jsonp.data[i][idx["ocean_tmp"]],
-            salinity: jsonp.data[i][idx["salinity"]],
-            par: Math.max(jsonp.data[i][idx["par"]], 0),
-            velocity: jsonp.data[i][idx["velocity"]],
+            ocean_tmp: jsonp.data[i][idx.ocean_tmp],
+            salinity: jsonp.data[i][idx.salinity],
+            par: Math.max(jsonp.data[i][idx.par], 0),
+            velocity: jsonp.data[i][idx.velocity],
         });
         rangeValues.push({
             time: curTime,
-            par: jsonp.data[i][idx["par"]]
+            par: jsonp.data[i][idx.par]
         });
         popNames.forEach(function(pop) {
             popValues.push({
@@ -295,10 +295,10 @@ function transformDataMap(jsonp) {
     var coords = [];    // environmental data
     for (var i in jsonp.data) {
         coords.push({
-            time: timeFormat.parse(jsonp.data[i][idx["time"]]),
-            lat: jsonp.data[i][idx["lat"]],
-            lon: jsonp.data[i][idx["lon"]],
-            LatLng: new google.maps.LatLng(jsonp.data[i][idx["lat"]], jsonp.data[i][idx["lon"]])
+            time: timeFormat.parse(jsonp.data[i][idx.time]),
+            lat: jsonp.data[i][idx.lat],
+            lon: jsonp.data[i][idx.lon],
+            LatLng: new google.maps.LatLng(jsonp.data[i][idx.lat], jsonp.data[i][idx.lon])
         });
     }
     return coords;
@@ -323,7 +323,7 @@ function transformDataCSTAR(jsonp) {
     var msecMinute = 60 * 1000;
     var prevTime = null;
     for (var i in jsonp.data) {
-        var curTime = timeFormat.parse(jsonp.data[i][idx["time"]]);
+        var curTime = timeFormat.parse(jsonp.data[i][idx.time]);
 
         // If this record is more than 4 minutes from last record, assume
         // records are missing and add a placeholder empty record. Only need 
@@ -332,20 +332,13 @@ function transformDataCSTAR(jsonp) {
         if (i > 0 && (curTime - prevTime) > 4 * msecMinute) {
             cstarValues.push({
                 time: new Date(prevTime.getTime() + (3 * msecMinute)),
-                attenuation: null,
-                type: "whole"
-            });
-            cstarValues.push({
-                time: new Date(prevTime.getTime() + (3 * msecMinute)),
-                attenuation: null,
-                type: "filtered"
+                attenuation: null
             });
         }
 
         cstarValues.push({
             time: curTime,
-            attenuation: jsonp.data[i][idx["attenuation"]],
-            type: jsonp.data[i][idx["type"]]
+            attenuation: jsonp.data[i][idx.attenuation]
         });
 
         prevTime = curTime;
@@ -370,7 +363,7 @@ function reduceAdd(key) {
             p.total += v[key];
         }
         return p;
-    }
+    };
 }
 
 function reduceRemove(key) {
@@ -384,7 +377,7 @@ function reduceRemove(key) {
             p.total -= v[key];
         }
         return p;
-    }
+    };
 }
 
 function reduceInitial() {
@@ -426,7 +419,7 @@ function plotLineChart(key, yAxisLabel) {
     chart.margins().left = 60;
     chart.xAxis().ticks(6);
     chart.yAxis().ticks(4);
-    chart.yAxis().tickFormat(d3.format(".2f"))
+    chart.yAxis().tickFormat(d3.format(".2f"));
     chart.render();
 }
 
@@ -490,7 +483,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
         });
     chart.margins().left = 60;
     chart.yAxis().ticks(6);
-    chart.yAxis().tickFormat(d3.format(".2f"))
+    chart.yAxis().tickFormat(d3.format(".2f"));
 
     // Legend setup
     if (legendFlag) {
@@ -507,12 +500,12 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
         // adjust chart size so that plot area is same size as chart with legend
         chart.height(chart.height() - legendHeight + 5);
     }
-    
+
     chart.render();
 }
 
 function plotRangeChart(yAxisLabel) {
-    var key = "rangeChart"
+    var key = "rangeChart";
     var chart = dc.lineChart("#" + key);
     charts[key] = chart;
 
@@ -549,87 +542,6 @@ function plotRangeChart(yAxisLabel) {
     chart.render();
 }
 
-function plotCSTARSeriesChart(key, yAxisLabel, legendFlag) {
-    var chart = dc.seriesChart("#" + key);
-    charts[key] = chart;
-
-    var minMaxTime = timeRange;
-    var binSize = getBinSize(minMaxTime);
-    var dim = timePopDims[binSize];
-    var group = groups[key][binSize];
-    var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
-
-    // As small performance improvement, hardcode substring positions since
-    // we know the key is always something like "1426522573342_key" and the
-    // length of the milliseconds string from Date.getTime() won't change until
-    // 2286
-    var keyAccessor = function(d) {
-        return new Date(+(d.key.substr(0, 13)));
-    };
-    var seriesAccessor = function(d) {
-        return d.key.substr(14);
-    };
-
-    var minMaxY = d3.extent(group.all(), valueAccessor);
-    var legendHeight = 15;  // size of legend
-
-    chart
-        .width(480)
-        .height(120)
-        .chart(dc.lineChart)
-        .x(d3.time.scale.utc().domain(minMaxTime))
-        .y(d3.scale.linear().domain(yAxisDomain))
-        .ordinalColors(["#1F77B4", "#B18904"])
-        .renderHorizontalGridLines(false)
-        .renderVerticalGridLines(false)
-        .dimension(dim)
-        .group(group)
-        .seriesAccessor(seriesAccessor)
-        .keyAccessor(keyAccessor)
-        .valueAccessor(valueAccessor)
-        .brushOn(false)
-        .clipPadding(10)
-        .yAxisLabel(yAxisLabel)
-        .xAxisLabel("Time (GMT)")
-        .title(function(d) {
-            return labelFormat(keyAccessor(d)) + "\n" + d3.format(".2f")(valueAccessor(d));
-        })
-        .childOptions(
-        {
-            defined: function(d) {
-                // don't plot segements with missing data
-                return (d.y !== null);
-            },
-            interpolate: "cardinal",
-            renderDataPoints: {
-                radius: 3,
-                fillOpacity: 0.65,
-                strokeOpacity: 1
-            }
-        });
-    chart.margins().left = 60;
-    chart.yAxis().ticks(6);
-    chart.yAxis().tickFormat(d3.format(".2f"))
-
-    // Legend setup
-    if (legendFlag) {
-        //chart.margins().top = legendHeight + 5;
-        chart.legend(dc.legend()
-            .x(320)
-            .y(0)
-            .itemHeight(legendHeight)
-            .gap(10)
-            .horizontal(true)
-            .autoItemWidth(true)
-        );
-    } else {
-        // adjust chart size so that plot area is same size as chart with legend
-        chart.height(chart.height() - legendHeight + 5);
-    }
-    
-    chart.render();
-}
-
 function updateCharts() {
     var t0 = new Date();
 
@@ -652,7 +564,7 @@ function updateCharts() {
 
     var binSize = getBinSize(timeRange);
     console.log("points per bin = " + binSize);
-    
+
     // Clear filters for instrument plots and population plots
     [1,2,3,4].forEach(function(binSize) {
         timeDims[binSize].filterAll();
@@ -737,10 +649,11 @@ function updateRangeChart() {
         charts.rangeChart.dimension(rangeDims[rangeBinSize]);
         charts.rangeChart.group(groups.rangeChart[rangeBinSize]);
         charts.rangeChart.expireCache();
+        var yAxisDomain;
         if (! yDomains.rangeChart) {
-            var yAxisDomain = d3.extent(groups.rangeChart[rangeBinSize].all(), valueAccessor);
+            yAxisDomain = d3.extent(groups.rangeChart[rangeBinSize].all(), valueAccessor);
         } else {
-            var yAxisDomain = yDomains.rangeChart;
+            yAxisDomain = yDomains.rangeChart;
         }
         charts.rangeChart.x().domain(totalTimeRange);
         charts.rangeChart.y().domain(yAxisDomain);
@@ -755,7 +668,7 @@ function updateRangeChart() {
     }
 
     var t1 = new Date();
-    //console.log("range chart update took " + (t1.getTime() - t0.getTime()) / 1000);
+    console.log("range chart update took " + (t1.getTime() - t0.getTime()) / 1000);
 }
 
 function valueAccessor(d) {
@@ -773,25 +686,27 @@ function recalculateY(chart, yDomain) {
         return;
     }
     if (! yDomain) {
+        var timekey;
         if (chart.children !== undefined) {
             // Population series plot
             // key for dimension is [time, pop]
-            var timeKey = function(element) {
+            timeKey = function(element) {
                 var parts = element.key.split("_");
                 return new Date(+parts[0]);
             };
         } else {
             // Single line chart
             // key for dimension is time
-            var timeKey = function(element) { return element.key; };
+            timeKey = function(element) { return element.key; };
         }
 
+        var valuesInRange;
         if (timeRange) {
-            var valuesInRange = chart.group().all().filter(function(element, index, array) {
+            valuesInRange = chart.group().all().filter(function(element, index, array) {
                 return (timeKey(element) >= timeRange[0] && timeKey(element) < timeRange[1]);
             });
         } else {
-            var valuesInRange = chart.group().all();
+            valuesInRange = chart.group().all();
         }
 
         // If data has been filtered, some group elements may have no data, which would
@@ -804,8 +719,8 @@ function recalculateY(chart, yDomain) {
         });
         // Make sure there is some distance within Y axis if all values are the same
         if (minMaxY[1] - minMaxY[0] === 0) {
-            minMaxY[0] -= .1;
-            minMaxY[1] += .1;
+            minMaxY[0] -= 0.1;
+            minMaxY[1] += 0.1;
         }
         chart.y(d3.scale.linear().domain(minMaxY));
     } else {
@@ -836,7 +751,7 @@ function roundDate(date, firstDate, binSizeMilli) {
 }
 
 function ceiling(input) {
-    return Math.floor(input + .9999999);
+    return Math.floor(input + 0.9999999);
 }
 
 function plot(jsonp) {
@@ -849,9 +764,9 @@ function plot(jsonp) {
 
     // Make separate crossfilters for sfl data and range plot to prevent them
     // from filtering each other.
-    sflxf = crossfilter(data["sfl"]);
-    rangexf = crossfilter(data["range"]);
-    popxf = crossfilter(data["pop"]);
+    sflxf = crossfilter(data.sfl);
+    rangexf = crossfilter(data.range);
+    popxf = crossfilter(data.pop);
 
     var msIn3Min = 3 * 60 * 1000;
     timeDims[1] = sflxf.dimension(function(d) { return d.time; });
@@ -916,16 +831,15 @@ function plot(jsonp) {
 
     plotPopSeriesChart("conc", "Abundance (10^6 cells/L)", legend = true);
     plotPopSeriesChart("size", "Forward scatter (a.u.)", legend = true);
-    configureLegendButtons(charts["conc"]);
-    configureLegendButtons(charts["size"]);
+    configureLegendButtons(charts.conc);
+    configureLegendButtons(charts.size);
 
     plotRangeChart("PAR (w/m2)");
     charts.rangeChart.filter(timeRange);  // set default brush selection
     updateRangeChart();
 
-    var query = "SELECT [time], attenuation, [type] ";
-    query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation typed] ";
-    query += "WHERE [type] != 'mixed'"
+    var query = "SELECT [time], attenuation ";
+    query += "FROM [seaflow.viz@gmail.com].[CSTAR3MIN_VIEW] ";
     query += "ORDER BY [time] ASC";
     executeSqlQuery(query, function(jsonp) {
         var data = transformDataCSTAR(jsonp);
@@ -933,11 +847,11 @@ function plot(jsonp) {
         cstarxf = crossfilter(data.cstar);
 
         var msIn3Min = 3 * 60 * 1000;
-        cstarDims[1] = cstarxf.dimension(function(d) { return String(d.time.getTime()) + "_" + d.type; });
+        cstarDims[1] = cstarxf.dimension(function(d) { return d.time; });
         var first = cstarDims[1].bottom(1)[0].time;
         [2,3,4,5,6,7,8].forEach(function(binSize) {
             cstarDims[binSize] = cstarxf.dimension(function(d) {
-                return String(roundDate(d.time, first, binSize*msIn3Min).getTime()) + "_" + d.type;
+                return roundDate(d.time, first, binSize*msIn3Min);
             });
         });
 
@@ -949,7 +863,7 @@ function plot(jsonp) {
             });
         });
 
-        plotCSTARSeriesChart("attenuation", "Attenuation (m-1)", legend = true);
+        plotLineChart("attenuation", "Attenuation (m-1)");
 
         updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
 
@@ -958,10 +872,10 @@ function plot(jsonp) {
 
         var t3 = new Date().getTime();
 
-        /*console.log("transform time = " + ((t1 - t0) / 1000));
+        console.log("transform time = " + ((t1 - t0) / 1000));
         console.log("crossfilter setup time = " + ((t2 - t1) / 1000));
         console.log("plot time = " + ((t3 - t2) / 1000));
-        console.log("total time = " + ((t3 - t0) / 1000));*/
+        console.log("total time = " + ((t3 - t0) / 1000));
     });
 }
 
@@ -980,17 +894,17 @@ function configureLegendButtons(chart) {
             popFlags[popName] = !popFlags[popName];
             filterPops();
             // Recalculate Y domain, reset onclick
-            if (charts["conc"]) {
-                recalculateY(charts["conc"]);
-                charts["conc"].resetSvg();
-                charts["conc"].render();
-                configureLegendButtons(charts["conc"]);
+            if (charts.conc) {
+                recalculateY(charts.conc);
+                charts.conc.resetSvg();
+                charts.conc.render();
+                configureLegendButtons(charts.conc);
             }
-            if (charts["size"]) {
-                recalculateY(charts["size"]);
-                charts["size"].resetSvg();
-                charts["size"].render();
-                configureLegendButtons(charts["size"]);
+            if (charts.size) {
+                recalculateY(charts.size);
+                charts.size.resetSvg();
+                charts.size.render();
+                configureLegendButtons(charts.size);
             }
         };
     });
@@ -1052,10 +966,9 @@ function update() {
                 // which which always return 1 data point below even if there was no new
                 // data
                 var latestCstar = new Date(cstarDims[1].top(1)[0].time.getTime() + 1000);
-                var query = "SELECT [time], attenuation, [type] ";
-                query += "FROM [seaflow.viz@gmail.com].[SeaFlow: 3 minute attenuation typed] ";
+                var query = "SELECT [time], attenuation ";
+                query += "FROM [seaflow.viz@gmail.com].[CSTAR3MIN_VIEW] ";
                 query += "WHERE [time] > '" + latestCstar.toISOString() + "' ";
-                query += "AND [type] != 'mixed' ";
                 query += "ORDER BY [time] ASC";
                 executeSqlQuery(query, function(jsonp) {
                     var data = transformDataCSTAR(jsonp);
