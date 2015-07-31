@@ -59,7 +59,7 @@ var yDomains = {
     ocean_tmp: null,
     salinity: null,
     par: null,
-    attenuation: [0.06, 0.15],
+    attenuation: [0.06, 0.20],
     conc: null,
     size: null
 };
