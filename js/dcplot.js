@@ -59,7 +59,7 @@ var yDomains = {
     ocean_tmp: null,
     salinity: null,
     par: null,
-    attenuation: [0.06, 0.20],
+    attenuation: null,
     conc: null,
     size: null
 };
@@ -234,7 +234,7 @@ function transformData(jsonp) {
         var curTime = timeFormat.parse(jsonp.data[i][idx.time]);
 
         // If this record is more than 4 minutes from last record, assume
-        // records are missing and add a placeholder empty record. Only need 
+        // records are missing and add a placeholder empty record. Only need
         // one placeholder record per gap.  This placeholder record makes it
         // possible to draw line chart with gaps.
         if (i > 0 && (curTime - prevTime) > 4 * msecMinute) {
@@ -326,7 +326,7 @@ function transformDataCSTAR(jsonp) {
         var curTime = timeFormat.parse(jsonp.data[i][idx.time]);
 
         // If this record is more than 4 minutes from last record, assume
-        // records are missing and add a placeholder empty record. Only need 
+        // records are missing and add a placeholder empty record. Only need
         // one placeholder record per gap.  This placeholder record makes it
         // possible to draw line chart with gaps.
         if (i > 0 && (curTime - prevTime) > 4 * msecMinute) {
@@ -571,7 +571,7 @@ function updateCharts() {
         timePopDims[binSize].filterAll();
     });
 
-    ["velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
+    ["attenuation", "velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
         if (charts[key]) {
             charts[key].dimension(timeDims[binSize]);
             charts[key].group(groups[key][binSize]);
@@ -600,19 +600,6 @@ function updateCharts() {
         }
     });
 
-    ["attenuation"].forEach(function(key) {
-        if (charts[key]) {
-            charts[key].dimension(timeDims[binSize]);
-            charts[key].group(groups[key][binSize]);
-            charts[key].expireCache();
-            charts[key].x().domain(timeRange);
-            recalculateY(charts[key], yDomains[key]);
-            // clear DOM nodes to prevent memory leaks before render
-            charts[key].resetSvg();
-            charts[key].render();
-        }
-    });
-
     var t1 = new Date();
     //console.log("chart updates took " + (t1.getTime() - t0.getTime()) / 1000);
 }
@@ -634,7 +621,7 @@ function updateRangeChart() {
         var filter = charts.rangeChart.filter();
         if (filter !== null) {
             // If the focus range is pinned to the right of the x axis (most recent)
-            // then 
+            // then
             if (pinnedToMostRecent) {
                 // how much time has been added
                 var delta = totalTimeRange[1].getTime() - filter[1].getTime();
@@ -689,7 +676,7 @@ function recalculateY(chart, yDomain) {
         var timekey;
         if (chart.children !== undefined) {
             // Population series plot
-            // key for dimension is [time, pop]
+            // key for dimension is getTime()_pop
             timeKey = function(element) {
                 var parts = element.key.split("_");
                 return new Date(+parts[0]);
@@ -864,6 +851,7 @@ function plot(jsonp) {
         });
 
         plotLineChart("attenuation", "Attenuation (m-1)");
+        updateCharts();
 
         updateInterval = setInterval(update, REFRESH_TIME_MILLIS);
 
