@@ -63,6 +63,12 @@ var yDomains = {
     conc: null,
     size: null
 };
+var erased = {
+  "velocity": {}, "ocean_tmp": {}, "salinity": {}, "par": {},
+  "conc": {}, "size": {}, "attenuation": {},
+};
+// Store transformed data outside of crossfilter
+var raw = {"sfl": [], "pop": [], "range": [], "cstar": []};
 
 // Track which populations should be shown in plots
 var popFlags = {};
@@ -347,41 +353,219 @@ function transformDataCSTAR(jsonp) {
     return { cstar: cstarValues };
 }
 
-// Reduce functions to stop crossfilter from coercing null values to 0
-// Allows chart.defined() to work as expected and create disconintinous
-// line charts, while also differentiating between true 0 values and
-// missing data.
+function resetPlots() {
+    sflxf = crossfilter();
+    rangexf = crossfilter();
+    popxf = crossfilter();
+    cstarxf = crossfilter();
+
+  // Add data back to crossfilters
+  raw.sfl.forEach(function(d) { sflxf.add([d]); });
+  raw.pop.forEach(function(d) { popxf.add([d]); });
+  raw.range.forEach(function(d) { rangexf.add([d]); });
+  raw.cstar.forEach(function(d) { cstarxf.add([d]); });
+
+  // Reconfigure crossfilter dimensions and groups
+  initializeSflPopData();
+  initializeCstarData();
+
+  // Reapply pop filters
+  filterPops();
+
+  // Replot
+  updateRangeChart();
+  updateCharts();
+}
+
+// Reduce functions to stop crossfilter from coercing null totals to 0.
+// This will happen if a null value is added to or subtracted from a null
+// total. D3 would then erroneously plot this point as 0, when it should not
+// be plotted at all. Keeping null totals as null allows chart.defined() to
+// work as expected and create discontinous line charts, differentiating
+// between true 0 values and missing data.
 function reduceAdd(key) {
-    return function(p, v) {
-        //console.log("adding: ", v.pop, v.time, v[key], p.count, p.total);
-        if (v[key] !== null) {
-            ++p.count;
+  return function(p, v) {
+    // Don't add this value if it's marked for erasure
+    if (erased[key]) {
+        if (erased[key][v.time.toISOString()] ||
+            (v.pop && erased[key][v.time.toISOString() + "_" + v.pop])) {
+            return p;
         }
-        // want to avoid coercing a null p.total to 0 by adding a null
-        // v[key]
-        if (p.total !== null || v[key] !== null) {
-            p.total += v[key];
-        }
-        return p;
-    };
+    }
+
+    // Record this member of the group, even if it is null and does not count
+    // towards the total or count for the group. Helpful during debugging.
+    p.members.push(v);
+
+    // If there is data to add
+    if (v[key] !== null && ! isNaN(v[key]) && v[key] !== undefined) {
+      ++p.count;
+      p.total += v[key];
+    }
+    return p;
+  };
 }
 
 function reduceRemove(key) {
-    return function(p, v) {
-        if (v[key] !== null) {
-            --p.count;
-        }
-        // want to avoid coercing a null p.total to 0 by subtracting
-        // a null v[key]
-        if (p.total !== null || v[key] !== null) {
-            p.total -= v[key];
-        }
-        return p;
-    };
+  return function(p, v) {
+    var idx = null;
+    for (var i=0; i<p.members.length; i++) {
+      if (p.members[i] === v) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx !== null) {
+      p.members.splice(idx, 1);  // erase this member
+    }
+
+    // If there is data to remove
+    if (v[key] !== null && ! isNaN(v[key]) && v[key] !== undefined) {
+      --p.count;
+      p.total -= v[key];
+    }
+    return p;
+  };
 }
 
 function reduceInitial() {
-    return { count: 0, total: null };
+  return { count: 0, total: null, members: [] };
+}
+
+// Make sure there are empty groups to interrupt line connections
+// when data is missing
+function addEmpty(group, binSize) {
+  var msIn1Min = 60 * 1000;
+  return {
+    all: function() {
+      var prev = null;
+      var groups = [];
+      group.all().forEach(function(g) {
+        // If the gap between data is more than <bucket size> + 1 minute,
+        // insert a null data point to break line segment.
+        if (prev && (g.key - prev) > binSize * 3 * msIn1Min + msIn1Min) {
+          var newdate = new Date(prev.getTime() + binSize * 3 * msIn1Min);
+          /*console.log("added empty group " + newdate.toISOString()) +
+                      " between " + prev.toISOString() + " and " +
+                      g.key.toISOString());*/
+          groups.push({
+            key: newdate,
+            value: {count: 0, total: null}
+          });
+        }
+        groups.push(g);
+        prev = g.key;
+      });
+      return groups;
+    }
+  };
+}
+
+// Make sure there are empty groups to interrupt line connections
+// when data is missing
+function addEmptyPop(group, binSize) {
+  var msIn1Min = 60 * 1000;
+  var keyAccessor = function(d) {
+    return new Date(+(d.key.substr(0, 13)));
+  };
+  var seriesAccessor = function(d) {
+    return d.key.substr(14);
+  };
+  return {
+    all: function() {
+      var prev = {};
+      var groups = [];
+      group.all().forEach(function(g) {
+        var pop = seriesAccessor(g);
+        var date = keyAccessor(g);
+        // If the gap between data is more than <bucket size> + 1 minute,
+        // insert a null data point to break line segment.
+        if (prev[pop] && (date - prev[pop]) > binSize * 3 * msIn1Min + msIn1Min) {
+          var newdate = new Date(prev[pop].getTime() + binSize * 3 * msIn1Min);
+          /*console.log("added empty group " + pop + " " + newdate.toISOString()
+                      + " between " + prev[pop].toISOString() + " and " +
+                      date.toISOString());*/
+          groups.push({
+            key: String(newdate.getTime()) + "_" + pop,
+            value: {count: 0, total: null}
+          });
+        }
+        groups.push(g);
+        prev[pop] = date;
+      });
+      return groups;
+    }
+  };
+}
+
+function initializeSflPopData() {
+    var msIn3Min = 3 * 60 * 1000;
+    timeDims[1] = sflxf.dimension(function(d) { return d.time; });
+
+    var first = timeDims[1].bottom(1)[0].time;
+    [2,3,4,5,6,7,8].forEach(function(binSize) {
+        timeDims[binSize] = sflxf.dimension(function(d) {
+            return roundDate(d.time, first, binSize*msIn3Min);
+        });
+    });
+
+    ["velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
+        groups[key] = {};
+        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
+            groups[key][binSize] = timeDims[binSize].group().reduce(
+                reduceAdd(key), reduceRemove(key), reduceInitial);
+        });
+    });
+
+    rangeDims[1] = rangexf.dimension(function(d) { return d.time; });
+    [2,3,4,5,6,7,8].forEach(function(binSize) {
+        rangeDims[binSize] = rangexf.dimension(function(d) {
+            return roundDate(d.time, first, binSize*msIn3Min);
+        });
+    });
+
+    (function(key) {
+        groups.rangeChart = {};
+        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
+            groups.rangeChart[binSize] = rangeDims[binSize].group().reduce(
+                reduceAdd(key), reduceRemove(key), reduceInitial);
+        });
+    }("par"));
+
+    timePopDims[1] = popxf.dimension(function(d) { return String(d.time.getTime()) + "_" + d.pop; });
+    [2,3,4,5,6,7,8].forEach(function(binSize) {
+        timePopDims[binSize] = popxf.dimension(function(d) {
+            return String(roundDate(d.time, first, binSize*msIn3Min).getTime()) + "_" + d.pop;
+        });
+    });
+    popDim = popxf.dimension(function(d) { return d.pop; });
+
+    ["conc", "size"].forEach(function(key) {
+        groups[key] = {};
+        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
+            groups[key][binSize] = timePopDims[binSize].group().reduce(
+                reduceAdd(key), reduceRemove(key), reduceInitial);
+        });
+    });
+}
+
+function initializeCstarData() {
+    var msIn3Min = 3 * 60 * 1000;
+    cstarDims[1] = cstarxf.dimension(function(d) { return d.time; });
+    var first = cstarDims[1].bottom(1)[0].time;
+    [2,3,4,5,6,7,8].forEach(function(binSize) {
+        cstarDims[binSize] = cstarxf.dimension(function(d) {
+            return roundDate(d.time, first, binSize*msIn3Min);
+        });
+    });
+
+    ["attenuation"].forEach(function(key) {
+        groups[key] = {};
+        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
+            groups[key][binSize] = cstarDims[binSize].group().reduce(
+                reduceAdd(key), reduceRemove(key), reduceInitial);
+        });
+    });
 }
 
 function plotLineChart(key, yAxisLabel) {
@@ -391,7 +575,7 @@ function plotLineChart(key, yAxisLabel) {
     var minMaxTime = timeRange;
     var binSize = getBinSize(minMaxTime);
     var dim = timeDims[binSize];
-    var group = groups[key][binSize];
+    var group = addEmpty(groups[key][binSize], binSize);
     var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
     chart
@@ -420,6 +604,15 @@ function plotLineChart(key, yAxisLabel) {
     chart.xAxis().ticks(6);
     chart.yAxis().ticks(4);
     chart.yAxis().tickFormat(d3.format(".2f"));
+    chart.on("renderlet", function(chart) {
+        chart.selectAll("circle").on("click", function(d, i) {
+            d.data.value.members.forEach(function(m) {
+                erased[key][m.time.toISOString()] = true;
+                console.log("removing " + key + " at " + m.time.toISOString());
+            });
+            resetPlots();
+        });
+    });
     chart.render();
 }
 
@@ -430,7 +623,7 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
     var minMaxTime = timeRange;
     var binSize = getBinSize(minMaxTime);
     var dim = timePopDims[binSize];
-    var group = groups[key][binSize];
+    var group = addEmptyPop(groups[key][binSize], binSize);
     var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
     // As small performance improvement, hardcode substring positions since
@@ -501,6 +694,14 @@ function plotPopSeriesChart(key, yAxisLabel, legendFlag) {
         chart.height(chart.height() - legendHeight + 5);
     }
 
+    chart.on("renderlet", function(chart) {
+        chart.selectAll("circle").on("click", function(d, i) {
+            d.data.value.members.forEach(function(m) {
+                erased[key][m.time.toISOString() + "_" + m.pop] = true;
+            });
+            resetPlots();
+        });
+    });
     chart.render();
 }
 
@@ -512,7 +713,7 @@ function plotRangeChart(yAxisLabel) {
     var minMaxTime = [rangeDims[1].bottom(1)[0].time, rangeDims[1].top(1)[0].time];
     var binSize = getBinSize(minMaxTime);
     var dim = rangeDims[binSize];
-    var group = groups.rangeChart[binSize];
+    var group = addEmpty(groups.rangeChart[binSize], binSize);
     var yAxisDomain = yDomains[key] ? yDomains[key] : d3.extent(group.all(), valueAccessor);
 
     chart
@@ -574,7 +775,7 @@ function updateCharts() {
     ["attenuation", "velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
         if (charts[key]) {
             charts[key].dimension(timeDims[binSize]);
-            charts[key].group(groups[key][binSize]);
+            charts[key].group(addEmpty(groups[key][binSize], binSize));
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
             recalculateY(charts[key], yDomains[key]);
@@ -587,7 +788,7 @@ function updateCharts() {
     ["conc", "size"].forEach(function(key) {
         if (charts[key]) {
             charts[key].dimension(timePopDims[binSize]);
-            charts[key].group(groups[key][binSize]);
+            charts[key].group(addEmptyPop(groups[key][binSize], binSize));
             charts[key].expireCache();
             charts[key].x().domain(timeRange);
             recalculateY(charts[key], yDomains[key]);
@@ -755,8 +956,14 @@ function plot(jsonp) {
     rangexf = crossfilter(data.range);
     popxf = crossfilter(data.pop);
 
-    var msIn3Min = 3 * 60 * 1000;
-    timeDims[1] = sflxf.dimension(function(d) { return d.time; });
+    // Save transformed data outside of crossfilter. Makes it easy to recreate
+    // crossfilters from scratch
+    data.sfl.forEach(function(d) { raw.sfl.push(d); });
+    data.pop.forEach(function(d) { raw.pop.push(d); });
+    data.range.forEach(function(d) { raw.range.push(d); });
+
+    initializeSflPopData();
+
     // Select the last day by default. If there is less than a day of data
     // select all data.
     timeRange = [timeDims[1].bottom(1)[0].time, timeDims[1].top(1)[0].time];
@@ -764,54 +971,8 @@ function plot(jsonp) {
     if (timeRangeSizeMilli >= 1000 * 60 * 60 * 24) {
         timeRange = [new Date(timeRange[1].getTime() - 1000 * 60 * 60 * 24), timeRange[1]];
     }
-    var first = timeDims[1].bottom(1)[0].time;
-    [2,3,4,5,6,7,8].forEach(function(binSize) {
-        timeDims[binSize] = sflxf.dimension(function(d) {
-            return roundDate(d.time, first, binSize*msIn3Min);
-        });
-    });
-
-    ["velocity", "ocean_tmp", "salinity", "par"].forEach(function(key) {
-        groups[key] = {};
-        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
-            groups[key][binSize] = timeDims[binSize].group().reduce(
-                reduceAdd(key), reduceRemove(key), reduceInitial);
-        });
-    });
-
-    rangeDims[1] = rangexf.dimension(function(d) { return d.time; });
-    [2,3,4,5,6,7,8].forEach(function(binSize) {
-        rangeDims[binSize] = rangexf.dimension(function(d) {
-            return roundDate(d.time, first, binSize*msIn3Min);
-        });
-    });
-
-    (function(key) {
-        groups.rangeChart = {};
-        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
-            groups.rangeChart[binSize] = rangeDims[binSize].group().reduce(
-                reduceAdd(key), reduceRemove(key), reduceInitial);
-        });
-    }("par"));
-
-    timePopDims[1] = popxf.dimension(function(d) { return String(d.time.getTime()) + "_" + d.pop; });
-    [2,3,4,5,6,7,8].forEach(function(binSize) {
-        timePopDims[binSize] = popxf.dimension(function(d) {
-            return String(roundDate(d.time, first, binSize*msIn3Min).getTime()) + "_" + d.pop;
-        });
-    });
-    popDim = popxf.dimension(function(d) { return d.pop; });
-
-    ["conc", "size"].forEach(function(key) {
-        groups[key] = {};
-        [1,2,3,4,5,6,7,8].forEach(function(binSize) {
-            groups[key][binSize] = timePopDims[binSize].group().reduce(
-                reduceAdd(key), reduceRemove(key), reduceInitial);
-        });
-    });
 
     var t2 = new Date().getTime();
-
     plotLineChart("velocity", "Speed (knots)");
     plotLineChart("ocean_tmp", "Temp (degC)");
     plotLineChart("salinity", "Salinity (psu)");
@@ -832,23 +993,9 @@ function plot(jsonp) {
         var data = transformDataCSTAR(jsonp);
 
         cstarxf = crossfilter(data.cstar);
+        data.cstar.forEach(function(d) { raw.cstar.push(d); });
 
-        var msIn3Min = 3 * 60 * 1000;
-        cstarDims[1] = cstarxf.dimension(function(d) { return d.time; });
-        var first = cstarDims[1].bottom(1)[0].time;
-        [2,3,4,5,6,7,8].forEach(function(binSize) {
-            cstarDims[binSize] = cstarxf.dimension(function(d) {
-                return roundDate(d.time, first, binSize*msIn3Min);
-            });
-        });
-
-        ["attenuation"].forEach(function(key) {
-            groups[key] = {};
-            [1,2,3,4,5,6,7,8].forEach(function(binSize) {
-                groups[key][binSize] = cstarDims[binSize].group().reduce(
-                    reduceAdd(key), reduceRemove(key), reduceInitial);
-            });
-        });
+        initializeCstarData();
 
         plotLineChart("attenuation", "Attenuation (m-1)");
         updateCharts();
@@ -880,20 +1027,7 @@ function configureLegendButtons(chart) {
         g.onclick = function() {
             // Show / Hide population specific data
             popFlags[popName] = !popFlags[popName];
-            filterPops();
-            // Recalculate Y domain, reset onclick
-            if (charts.conc) {
-                recalculateY(charts.conc);
-                charts.conc.resetSvg();
-                charts.conc.render();
-                configureLegendButtons(charts.conc);
-            }
-            if (charts.size) {
-                recalculateY(charts.size);
-                charts.size.resetSvg();
-                charts.size.render();
-                configureLegendButtons(charts.size);
-            }
+            resetPlots();
         };
     });
 }
@@ -946,8 +1080,11 @@ function update() {
             if (data.sfl.length) {
                 console.log("Added " + data.sfl.length + " data points");
                 sflxf.add(data.sfl);
+                data.sfl.forEach(function(d) { raw.sfl.push(d); });
                 popxf.add(data.pop);
+                data.pop.forEach(function(d) { raw.pop.push(d); });
                 rangexf.add(data.range);
+                data.range.forEach(function(d) { raw.range.push(d); });
                 // Add one second to make sure we don't regrab the latest time point.
                 // sqlshare by default returns a time string with 1 second precision,
                 // but in the db the latest time will have some milliseconds as well
@@ -963,6 +1100,7 @@ function update() {
                     if (data.cstar.length) {
                         console.log("Added " + data.cstar.length + " CSTAR data points");
                         cstarxf.add(data.cstar);
+                        data.cstar.forEach(function(d) { raw.cstar.push(d); });
                     } else {
                         console.log("No new CSTAR data");
                     }
