@@ -552,7 +552,7 @@ function initializeSflPopData() {
 function initializeCstarData() {
     var msIn3Min = 3 * 60 * 1000;
     cstarDims[1] = cstarxf.dimension(function(d) { return d.time; });
-    var first = cstarDims[1].bottom(1)[0].time;
+    var first = timeDims[1].bottom(1)[0].time;
     [2,3,4,5,6,7,8].forEach(function(binSize) {
         cstarDims[binSize] = cstarxf.dimension(function(d) {
             return roundDate(d.time, first, binSize*msIn3Min);
