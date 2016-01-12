@@ -1090,7 +1090,10 @@ function update() {
                 // but in the db the latest time will have some milliseconds as well
                 // which which always return 1 data point below even if there was no new
                 // data
-                var latestCstar = new Date(cstarDims[1].top(1)[0].time.getTime() + 1000);
+                var latestCstar = latestTime;
+                if (cstarDims[1].top(1).length > 0) {
+                  latestCstar = latestCstar = new Date(cstarDims[1].top(1)[0].time.getTime() + 1000);
+                }
                 var query = "SELECT [time], attenuation ";
                 query += "FROM [seaflow.viz@gmail.com].[CSTAR3MIN_VIEW] ";
                 query += "WHERE [time] > '" + latestCstar.toISOString() + "' ";
