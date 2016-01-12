@@ -93,7 +93,7 @@ function zoomMapToBounds() {
 function getNewShipTracks() {
     console.log('refreshing ship tracks since ' + recentShipTimestamp);
     var query = "SELECT [time], lat, lon ";
-    query += "FROM [seaflow.viz@gmail.com].[SFL_VIEW] ";
+    query += "FROM [seaflow.viz@gmail.com].[SFL_REALTIME_VIEW] ";
     query += "WHERE [time] > '" + (new Date(recentShipTimestamp.getTime() + 1000)).toISOString() + "' ";
     query += "ORDER BY [time] ASC";
 
